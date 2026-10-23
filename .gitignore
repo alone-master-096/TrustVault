@@ -1,0 +1,72 @@
+﻿# Secrets and environment files
+.env
+.env.*
+**/.env
+**/.env.*
+!.env.example
+!.env.*.example
+**/.env.example
+**/.env.*.example
+!**/.env.example
+!**/.env.*.example
+
+# Dependencies and generated output
+**/node_modules/
+**/.next/
+**/dist/
+**/coverage/
+**/.turbo/
+**/.vercel/
+**/npm-debug.log*
+**/yarn-debug.log*
+**/pnpm-debug.log*
+
+# Local secrets, keys, certificates, and logs
+*.pem
+*.key
+*.p12
+*.pfx
+*.log
+
+# Editor and operating-system files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Old project copies and local development backups
+/05/
+/59/
+/maintenance-backup-*/
+/*.backup-*
+
+# Allow safe example environment templates
+!frontend/.env.example
+!backend/.env.example
+
+# Exclude development backup files anywhere in the project
+**/*.backup-*
+**/*.backup-*-*
+**/.gitignore.backup-*
+
+# Exclude archived maintenance snapshots inside active projects
+**/maintenance-backup-*/
+**/maintenance-backup-*/**
+**/*.bak
+**/*.bak.*
+**/*.tsbuildinfo
+
+# Exclude compiled JavaScript and source maps inside backend source snapshots
+backend/maintenance-backup-*/
+backend/maintenance-backup-*/**
+**/*.js.map
+**/*.d.ts.map
+
+# Exclude temporary recovery copies of frontend files
+frontend/src/**/*.recovery-*
+frontend/src/**/*.bak
+frontend/src/**/*.bak.*
+
+# Internal local inspection artifacts
+/project-files.txt
+/backend/trustvault-inspection-report.txt
