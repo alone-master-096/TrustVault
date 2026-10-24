@@ -1,32 +1,43 @@
 ﻿# TrustVault Database Setup
 
-TrustVault uses PostgreSQL through the backend database connection.
+TrustVault uses PostgreSQL through the backend connection configured by `DATABASE_URL`.
 
-## Existing database
+## Verified existing development schema
 
-The current development project already has the following tables:
+A read-only inspection of the configured database confirmed these public tables:
 
-- users
-- documents
-- document_permissions
-- audit_logs
+- `users`
+- `documents`
+- `document_permissions`
+- `audit_logs`
 
-The application also uses role and permission enums. Preserve the existing
-schema when working with a database that already contains application data.
+The following PostgreSQL enum types were also confirmed:
 
-## Before setting up a fresh database
+- `user_role`: `admin`, `owner`, `viewer`
+- `permission_type`: `read`, `edit`
+- `audit_action`: `login`, `logout`, `upload`, `download`, `view`, `update`, `delete`, `permission_granted`, `permission_revoked`, `permission_changed`, `access_denied`
 
-1. Create a PostgreSQL database.
-2. Review the actual queries and table definitions used by the backend.
-3. Create the required tables, enum types, constraints, and indexes.
-4. Configure DATABASE_URL in backend/.env.
-5. Start the backend and verify GET /api/health.
-6. Run the backend test suite.
+The inspected tables include primary keys and foreign keys. The `users.email` column is unique; `documents.storage_path` is unique; and `document_permissions` has a unique constraint named `unique_document_user_permission`.
 
-## Important
+The configured Supabase storage bucket `trustvault-documents` was found and is private.
 
-This repository does not yet contain a verified, complete schema migration.
-Do not treat this document as executable SQL or use it to recreate an existing
-database. A complete migration must be derived from the actual application
-queries and the existing database schema before fresh-database setup can be
-considered complete.
+## Local configuration
+
+1. Configure `DATABASE_URL` in `backend/.env`.
+2. Configure `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` in `backend/.env`.
+3. Keep credentials private and ensure environment files remain untracked.
+4. Start the backend and verify `GET /api/health`.
+5. Run the backend test suite with `npm test` from the `backend` directory.
+
+## Fresh database setup status
+
+A complete, verified, executable schema migration is not yet included in this repository. The inspection above documents metadata from the existing database; it is not a migration script and does not contain every index, policy, trigger, or storage configuration detail that a reproducible deployment may require.
+
+Do not run guessed `CREATE TABLE`, `DROP`, or destructive migration statements against an existing database. Before fresh installation can be considered reproducible, derive and review a migration from the actual backend queries and complete schema metadata, then test it against a separate empty database.
+
+## Security notes
+
+- Do not commit database URLs, Supabase service-role keys, JWT secrets, or user passwords.
+- Keep document storage private.
+- Enforce authorization in the backend for each document operation.
+- Back up production data before applying reviewed migrations.

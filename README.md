@@ -1,36 +1,91 @@
-# TrustVault — reviewed source bundle
+﻿# TrustVault
 
-This source bundle is based on the supplied TrustVault debug ZIP and the Snovasys Fresher Hiring Challenge 2026 specification. It is not a claim that the project has been deployed or passed a build in this environment.
+TrustVault is a document-sharing application with authenticated access, document ownership, per-document read/edit permissions, document downloads, and audit logging.
+
+## Verified project status
+
+The following checks passed in the local development environment on the most recent verification run:
+
+- Backend automated tests: 33 passed, 0 failed.
+- Backend production TypeScript build: passed.
+- Frontend production Next.js build: passed.
+- Local backend root, backend health endpoint, and frontend root: HTTP 200.
+- PostgreSQL metadata inspection: `users`, `documents`, `document_permissions`, and `audit_logs` exist.
+- Supabase storage inspection: `trustvault-documents` exists and is configured as private.
+- Git working tree was clean before the documentation update.
+
+These results verify local builds and the existing automated tests. They do not establish that the application has been deployed or that every end-to-end security scenario has been tested.
+
+## Requirements
+
+- Node.js and npm compatible with the lockfiles.
+- A PostgreSQL database.
+- Supabase project credentials and a private storage bucket named `trustvault-documents`.
+- Backend and frontend environment configuration.
 
 ## Local development
 
-1. Keep your real environment variables in untracked `backend/.env`; never commit it.
-2. Configure the database schema from your actual Supabase/PostgreSQL project. The supplied ZIP did not include SQL schema/migrations, so this bundle does not invent a potentially incompatible schema.
-3. In one PowerShell window:
+Keep secrets in ignored local environment files. Never commit real credentials.
 
-   ```powershell
-   Set-Location 'C:\Users\P Suneetha\trustvault\backend'
-   npm ci
-   npm test
-   npm run build
-   npm run dev
-   ```
+### Backend
 
-4. In another PowerShell window:
+Open PowerShell:
 
-   ```powershell
-   Set-Location 'C:\Users\P Suneetha\trustvault\frontend'
-   npm ci
-   npm run build
-   npm run dev
-   ```
+```powershell
+Set-Location 'C:\Users\P Suneetha\trustvault\backend'
+npm ci
+npm test
+npm run build
+npm run dev
+```
 
-5. Set `NEXT_PUBLIC_API_URL` for the frontend deployment and `FRONTEND_URL` for the backend deployment to the actual deployed origin.
+The development API is expected at `http://localhost:5000` when using the local configuration.
 
-## Important
+### Frontend
 
-- No `.env` or credentials are included.
-- `docs/REVIEW-AND-REQUIREMENTS.md` lists changes and remaining PDF requirements.
-- `docs/API.md` documents the current routes.
-- `docs/VALIDATION.md` contains required local validation and manual security checks.
-- Metadata editing is implemented for owners and active edit grantees. File-content replacement/versioning, database schema/setup SQL, deployed URL, seed credentials, full end-to-end authorization tests, and demo video remain incomplete/unverified. Do not submit these as complete until they are actually implemented and verified.
+Open a second PowerShell window:
+
+```powershell
+Set-Location 'C:\Users\P Suneetha\trustvault\frontend'
+npm ci
+npm run build
+npm run dev
+```
+
+The development frontend is expected at `http://localhost:3000` when using the local configuration.
+
+## Environment configuration
+
+Use `.env.example` as a reference only. Configure the actual values in local environment files:
+
+- `backend/.env`: database URL, Supabase URL, Supabase service-role key, JWT secret, and backend frontend-origin configuration.
+- `frontend/.env.local`: `NEXT_PUBLIC_API_URL`, normally `http://localhost:5000/api` for local development.
+
+Do not paste secrets into issues, logs, documentation, or source control. The Supabase service-role key must remain server-side.
+
+## Database
+
+The existing development database has the four tables listed above and the `user_role`, `permission_type`, and `audit_action` enum types. See [Database setup notes](database/README.md).
+
+A complete, independently verified fresh-database migration is not currently included. Do not recreate or modify an existing database based only on this documentation.
+
+## Documentation
+
+- [API reference](docs/API.md)
+- [Threat model](THREATS.md)
+- [AI prompt log](PROMPTS.md)
+- [Requirements review](docs/REVIEW-AND-REQUIREMENTS.md)
+- [Validation checklist](docs/VALIDATION.md)
+
+## Remaining release work
+
+Before describing the project as fully submission-ready, verify and complete the challenge's required deliverables:
+
+- A reproducible database migration for a fresh installation.
+- Exact API documentation checked against route implementations.
+- Real multi-user end-to-end authorization and revocation tests.
+- Deployment URL and working deployment verification, if required.
+- Seed/demo accounts created securely and documented without publishing real passwords.
+- The required demonstration video, if applicable.
+
+Do not claim an outstanding item is complete until it has been implemented and verified.
