@@ -1,4 +1,4 @@
-﻿import type { Request, Response } from "express";
+import type { Request, Response } from "express";
 import { z } from "zod";
 import { registerSchema, loginSchema } from "./auth.types";
 import { registerUser, loginUser } from "./auth.service";
@@ -31,7 +31,7 @@ export async function requestReset(req: Request, res: Response) {
     if (error instanceof Error && error.message === "EMAIL_PROVIDER_NOT_CONFIGURED") {
       return res.status(503).json({ error: "EMAIL_PROVIDER_NOT_CONFIGURED", message: "Password reset email is not configured yet. Please try again later." });
     }
-    console.error("Password reset request failed.");
+    console.error("[PasswordReset] Request error:", error instanceof Error ? error.message : "Unknown error");
     return res.status(502).json({ error: "EMAIL_DELIVERY_FAILED", message: "Unable to send the verification email right now. Please try again later." });
   }
 }

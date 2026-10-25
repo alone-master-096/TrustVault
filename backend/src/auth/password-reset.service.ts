@@ -90,7 +90,13 @@ export async function requestPasswordReset(rawEmail: string): Promise<void> {
       subject: "Your TrustVault password reset code",
       text: `Your TrustVault verification code is ${code}. It expires in ${CODE_TTL_MINUTES} minutes. If you did not request this, ignore this email.`,
     });
-  } catch {
+  } catch (error) {
+    const smtpError = error as { code?: string; responseCode?: number; message?: string };
+    console.error("[PasswordReset] SMTP delivery failed", {
+      code: smtpError?.code || "UNKNOWN",
+      responseCode: smtpError?.responseCode || null,
+      message: (smtpError?.message || "No error message").slice(0, 300),
+    });
     await pool.query(
       "DELETE FROM password_reset_codes WHERE email = $1",
       [email]
@@ -165,7 +171,13 @@ export async function resetPassword(
   } catch (error) {
     try {
       await client.query("ROLLBACK");
-    } catch {}
+    } catch (error) {
+    const smtpError = error as { code?: string; responseCode?: number; message?: string };
+    console.error("[PasswordReset] SMTP delivery failed", {
+      code: smtpError?.code || "UNKNOWN",
+      responseCode: smtpError?.responseCode || null,
+      message: (smtpError?.message || "No error message").slice(0, 300),
+    });}
     throw error;
   } finally {
     client.release();
