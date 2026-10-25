@@ -25,3 +25,30 @@ Design integration tests using separate owner and viewer accounts. Verify that a
 ## 2026-10-22 — 6. Challenge submission readiness
 
 Compare the implementation with the TrustVault challenge requirements. Identify missing threat documentation, API documentation, setup instructions, deployment evidence, role-based seed credentials, and demo deliverables. Distinguish verified functionality from outstanding work.
+
+## Implementation and verification evidence
+
+The links below identify relevant repository changes. A commit documents a code change; it does not, by itself, prove that every related security scenario passed or establish the exact wording of an AI response.
+
+### Document permissions
+- Commit: [4110d2b — Support multi-user document permissions](https://github.com/alone-master-096/TrustVault/commit/4110d2b)
+- Evidence: repository history records a change for multi-user document permissions.
+- Verification limitation: this commit alone does not establish successful end-to-end testing with separate real owner and recipient accounts.
+
+### Document download authorization
+- Commit: [02683f1 — Add document download authorization tests](https://github.com/alone-master-096/TrustVault/commit/02683f1)
+- Evidence: repository history records the addition of document download authorization tests.
+- Verification limitation: the commit message does not identify every test case or prove production deployment behavior.
+
+### Password reset and email diagnostics
+- [118e107 — Add email password reset with Gmail SMTP](https://github.com/alone-master-096/TrustVault/commit/118e107)
+- [ba5444c — Add password reset email and request timeouts](https://github.com/alone-master-096/TrustVault/commit/ba5444c)
+- [365a947 — Add password reset email diagnostics](https://github.com/alone-master-096/TrustVault/commit/365a947)
+- Evidence: these commits document password-reset email implementation and subsequent timeout/diagnostic changes.
+- Verification limitation: commit history does not prove that live SMTP delivery succeeds in the deployed environment.
+
+### Reported automated checks
+On 2026-10-25, the reported local PowerShell output showed 33 backend tests passed and 0 failed, the backend TypeScript production build passed, and the frontend production build passed. These are reported local checks, not proof that every deployment or multi-user end-to-end scenario has been verified.
+
+### Keeping this log accurate
+For future AI-assisted work, record the actual prompt and date, the suggestion accepted or rejected, the code or documentation changed, the exact test/build command and result, and a commit link when a change is committed. Do not claim an AI suggestion, test result, or production verification unless there is evidence for it.

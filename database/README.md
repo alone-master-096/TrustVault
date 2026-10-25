@@ -2,24 +2,33 @@
 
 TrustVault uses PostgreSQL through the backend connection configured by `DATABASE_URL`.
 
-## Verified existing development schema
+## Schema file
 
-A read-only inspection of the configured database confirmed these public tables:
+The repository includes [`schema.sql`](schema.sql), a clean-install schema derived from read-only inspection of the existing development database.
+
+It defines the five tables:
 
 - `users`
 - `documents`
 - `document_permissions`
 - `audit_logs`
+- `password_reset_codes`
 
-The following PostgreSQL enum types were also confirmed:
+It also defines the `user_role`, `permission_type`, and `audit_action` enums, observed constraints and indexes, automatic `updated_at` triggers, and audit-log modification protection.
 
-- `user_role`: `admin`, `owner`, `viewer`
-- `permission_type`: `read`, `edit`
-- `audit_action`: `login`, `logout`, `upload`, `download`, `view`, `update`, `delete`, `permission_granted`, `permission_revoked`, `permission_changed`, `access_denied`
+**Validation status:** the schema file has been created but has not yet been executed against a separate empty PostgreSQL database. Do not describe it as independently tested or production-ready until that validation succeeds.
 
-The inspected tables include primary keys and foreign keys. The `users.email` column is unique; `documents.storage_path` is unique; and `document_permissions` has a unique constraint named `unique_document_user_permission`.
+## Fresh database setup
 
-The configured Supabase storage bucket `trustvault-documents` was found and is private.
+1. Create a separate, empty PostgreSQL database for testing.
+2. Configure a connection to that database without overwriting the existing `backend/.env`.
+3. Review `schema.sql` before running it.
+4. Execute the schema against the empty test database only.
+5. Verify the tables, enum types, constraints, indexes, and triggers.
+6. Run the backend tests and verify the application against the test database.
+7. Configure the private Supabase Storage bucket separately. Creating PostgreSQL tables does not create or configure the storage bucket.
+
+The SQL includes a guard against existing TrustVault tables and enum types. This is a precaution, not a substitute for selecting the correct database. Never run this clean-install file against the existing development or production database.
 
 ## Local configuration
 
@@ -29,11 +38,9 @@ The configured Supabase storage bucket `trustvault-documents` was found and is p
 4. Start the backend and verify `GET /api/health`.
 5. Run the backend test suite with `npm test` from the `backend` directory.
 
-## Fresh database setup status
+## Seed accounts
 
-A complete, verified, executable schema migration is not yet included in this repository. The inspection above documents metadata from the existing database; it is not a migration script and does not contain every index, policy, trigger, or storage configuration detail that a reproducible deployment may require.
-
-Do not run guessed `CREATE TABLE`, `DROP`, or destructive migration statements against an existing database. Before fresh installation can be considered reproducible, derive and review a migration from the actual backend queries and complete schema metadata, then test it against a separate empty database.
+A reproducible seed script and verified demo-account credentials have not yet been established by this database setup work. Do not publish real passwords, password hashes, or production credentials. Create demo accounts using the application's supported account-creation flow or a reviewed seed process.
 
 ## Security notes
 

@@ -2,99 +2,183 @@
 
 ## Base URL
 
-Local development: `http://localhost:5000`
+Local: `http://localhost:5000`
 
-All API paths below include their full `/api` prefix. Protected endpoints require a bearer token unless stated otherwise.
+Production: `https://trustvault-api-i1ya.onrender.com`
+
+Application endpoints use the `/api` prefix unless stated otherwise.
 
 ## Authentication
 
-Send the token in the HTTP header:
+Protected endpoints require:
 
 `Authorization: Bearer <token>`
 
-| Method | Endpoint | Access | Purpose |
-|---|---|---|---|
-| POST | `/api/auth/register` | Public route; see registration validation in controller | Register a user |
-| POST | `/api/auth/login` | Public | Authenticate and obtain login response/token |
-| GET | `/api/auth/me` | Authenticated | Return the current user's profile |
+Obtain the token through login. Never publish tokens, passwords, or service credentials.
 
-`GET /api/auth/me` returns a `user` object. It returns `404 USER_NOT_FOUND` if the user record is missing and `403 ACCOUNT_DISABLED` if the account is disabled.
+## General and Authentication Endpoints
+
+| Method | Endpoint | Access | Success |
+|---|---|---|---|
+| GET | `/` | Public | 200 |
+| GET | `/api/health` | Public | 200 when database is reachable; 503 otherwise |
+| POST | `/api/auth/register` | Public | 201 |
+| POST | `/api/auth/login` | Public | 200 |
+| POST | `/api/auth/forgot-password` | Public | 200 |
+| POST | `/api/auth/reset-password` | Public | 200 |
+| GET | `/api/auth/me` | Authenticated | 200 |
+
+### Password reset request
+
+`POST /api/auth/forgot-password`
+
+Request body:
+
+```json
+{
+  "email": "user@example.com"
+}
+```
+
+The email must be valid and no longer than 255 characters. A successful response does not disclose whether an account exists. Rate limiting may return 429; unavailable email configuration may return 503.
+
+### Complete password reset
+
+`POST /api/auth/reset-password`
+
+Request body:
+
+```json
+{
+  "email": "user@example.com",
+  "code": "123456",
+  "newPassword": "ReplaceWithAStrongPassword"
+}
+```
+
+The code must contain six digits. The password must contain 8–100 characters. The code must be valid and unexpired.
+
+Registration and login request schemas are defined in `backend/src/auth/auth.types.ts`. Consult that file for their exact fields and validation rules.
 
 ## Documents
 
-| Method | Endpoint | Access | Purpose |
+| Method | Endpoint | Access | Success |
 |---|---|---|---|
-| GET | `/api/documents` | Authenticated | List documents available to the current user |
-| POST | `/api/documents/upload` | Authenticated | Upload a document; passes through upload middleware |
-| GET | `/api/documents/:id/download` | Authenticated and authorized for read access | Download a document |
-| DELETE | `/api/documents/:id` | Authenticated; handler enforces deletion rules | Soft-delete a document |
+| GET | `/api/documents` | Authenticated | 200 |
+| POST | `/api/documents/upload` | Authenticated | 201 |
+| GET | `/api/documents/:id/download` | Authenticated plus document read permission | 200 with file bytes |
+| DELETE | `/api/documents/:id` | Authenticated; owner only | 200 |
 
-Replace `:id` with the document UUID.
+### Upload a document
 
-The download handler checks current read access before accessing the private storage bucket. The owner can access their own document; active read or edit grants allow reading according to the permission service. Denied downloads are intended to be audited as access denials.
+`POST /api/documents/upload`
 
-The upload request's exact multipart field names and validation limits must be checked in `backend/src/documents/document.controller.ts` before constructing a client request.
+Use `multipart/form-data` with these fields:
 
-## Document permissions
+- `file`: required file, maximum 10 MB.
+- `name`: required, trimmed, 1–200 characters.
+- `description`: optional, maximum 1,000 characters.
+- `category`: optional, maximum 100 characters.
 
-These routes share the `/api/documents` mount prefix.
+Accepted MIME types are PDF, plain text, PNG, JPEG, and DOCX. The backend also checks file content. A successful response returns the created document object.
 
-| Method | Endpoint | Access | Purpose |
+Possible validation errors include `FILE_REQUIRED`, `INVALID_FILE_CONTENT`, `INVALID_METADATA`, and `UNSUPPORTED_FILE_TYPE`.
+
+### List documents
+
+`GET /api/documents`
+
+Returns a JSON object containing a `documents` array for the authenticated user.
+
+### Download a document
+
+`GET /api/documents/:id/download`
+
+Requires a valid document UUID and current read access. Returns the file as an attachment. An invalid ID returns 400, denied access returns 403, and a missing document returns 404.
+
+### Delete a document
+
+`DELETE /api/documents/:id`
+
+Only the document owner can delete it. Deletion is a soft delete; the record is marked deleted rather than immediately removed from the database. Invalid IDs return 400. Missing documents and non-owner attempts return 404.
+
+## Document Permissions
+
+| Method | Endpoint | Access | Success |
 |---|---|---|---|
-| POST | `/api/documents/:id/permissions` | Authenticated; controller applies permission rules | Grant document permission |
-| DELETE | `/api/documents/:id/permissions` | Authenticated; controller applies permission rules | Revoke document permission |
+| POST | `/api/documents/:id/permissions` | Authenticated; owner authorization enforced by service | 201 |
+| DELETE | `/api/documents/:id/permissions` | Authenticated; owner authorization enforced by service | 200 |
 
-The permission service supports `read` and `edit`. An edit grant also permits reading. Revocation marks the permission inactive; access checks must use current database permission state.
+### Grant permission
 
-The exact request body fields and all controller-level owner checks must be verified in `backend/src/permissions/permission.controller.ts`.
+`POST /api/documents/:id/permissions`
 
-## User search
+JSON request body:
 
-| Method | Endpoint | Access | Query parameters |
+```json
+{
+  "userId": "00000000-0000-4000-8000-000000000000",
+  "permission": "read"
+}
+```
+
+Replace the example UUID with the recipient's actual user ID. `permission` must be `read` or `edit`. The owner cannot grant a permission to themselves. The recipient must exist and be active.
+
+### Revoke permission
+
+`DELETE /api/documents/:id/permissions`
+
+JSON request body:
+
+```json
+{
+  "userId": "00000000-0000-4000-8000-000000000000"
+}
+```
+
+Replace the example UUID with the actual recipient ID. Revocation requires document ownership and an existing permission.
+
+## User Search
+
+| Method | Endpoint | Access | Success |
 |---|---|---|---|
-| GET | `/api/users/search` | Authenticated; role must be `owner` or `admin` | `q` — at least 2 characters |
+| GET | `/api/users/search?q=<query>` | Authenticated owner/admin | 200 |
 
-The query is trimmed and limited to 100 characters. The endpoint searches active users by name or email, excludes the current user, and returns at most 20 results as `{ "users": [...] }`. A query shorter than two characters returns `400 SEARCH_QUERY_TOO_SHORT`.
+The query must contain at least two characters. Results include active users matching name or email, exclude the current user, and are limited to 20 results.
 
 ## Administration
 
-Both admin endpoints require authentication and a role of `admin` or `owner`.
-
-| Method | Endpoint | Query parameters | Purpose |
+| Method | Endpoint | Access | Success |
 |---|---|---|---|
-| GET | `/api/admin/users` | Optional `q`; trimmed and limited to 100 characters | Search active users by name or email; maximum 50 results |
-| GET | `/api/admin/audit` | Optional `limit` and `offset` | Retrieve audit records, newest first |
+| GET | `/api/admin/users?q=<query>` | Authenticated admin/owner | 200 |
+| GET | `/api/admin/audit?limit=50&offset=0` | Authenticated admin/owner | 200 |
 
-`GET /api/admin/users` returns `{ "users": [...] }`.
+The admin user list is limited to 50 results. The audit endpoint returns `auditLogs` and pagination information. The default limit is 50, the maximum is 100, and the offset is capped at 1,000,000.
 
-`GET /api/admin/audit` defaults to `limit=50` and `offset=0`; `limit` is capped at 100 and `offset` at 1,000,000. It returns `auditLogs` and a `pagination` object.
+## Error Handling
 
-Note: the current route middleware permits both `admin` and `owner` roles for these endpoints. Do not describe them as admin-only unless the implementation is changed and verified.
+Common status codes:
 
-## Health check
+- `400`: invalid request, validation failure, or malformed ID.
+- `401`: missing or invalid authentication.
+- `403`: authenticated but not permitted to perform an operation.
+- `404`: resource or account not found, or deliberately concealed by the authorization policy.
+- `409`: registration email already exists.
+- `429`: password-reset rate limit reached.
+- `500`: unexpected server error.
+- `502`: password-reset email delivery failed.
+- `503`: database unavailable or email provider not configured.
 
-| Method | Endpoint | Access | Purpose |
-|---|---|---|---|
-| GET | `/api/health` | Public | Report API/database health |
+Actual response bodies depend on the endpoint and error condition. See the corresponding controller for the authoritative behavior.
 
-The health handler returns a service status and reports a database failure with HTTP 503.
+## Security Notes
 
-## Error handling and security
+- Keep JWT secrets, database credentials, and Supabase service-role keys private.
+- Do not commit `.env` files or publish real access tokens.
+- Document authorization must be enforced by the backend, not merely by the frontend.
+- Documents are stored in a private Supabase Storage bucket.
+- Verify access grants and revocation with separate accounts before release.
 
-Clients should handle authentication failures, authorization denials, validation errors, missing resources, and server/database errors.
+## Verification Status
 
-- Enforce authorization on the backend for every protected operation.
-- Do not rely on hidden frontend controls as access control.
-- Keep the Supabase service-role key server-side.
-- Keep document storage private.
-- Verify revocation by attempting a subsequent request with the revoked user's token.
-- Do not assume every endpoint has identical error response shapes.
-
-## Verification still required
-
-- Confirm registration/login request and response schemas in the authentication controller.
-- Confirm upload multipart field names, size/type limits, and response schema.
-- Confirm permission grant/revoke request bodies and controller-level ownership checks.
-- Exercise all endpoints with multiple real users and roles.
-- Verify audit records for successful and denied actions.
-- Test the documented behavior against a fresh database and a deployed environment before claiming production readiness.
+This reference is based on the inspected route registrations and controllers. It documents implementation behavior but does not prove every endpoint works end to end. Run automated tests and verify deployed multi-user scenarios before claiming complete release readiness.

@@ -1,4 +1,4 @@
-﻿# TrustVault — PDF Requirements Review
+# TrustVault — PDF Requirements Review
 
 This checklist follows the Snovasys Fresher Hiring Challenge 2026 brief.
 A source file existing or a production build passing does not prove a
@@ -17,7 +17,7 @@ requirement works end to end.
 | 7 | Search by name, owner, category and date | Category exists in source. Complete behavior for every required filter is not yet proven. |
 | 8 | Validate uploaded files | Upload validation exists. Test invalid MIME types, extensions, sizes, malformed input and storage failures. |
 | 9 | Administrative activity and permission-change view | Admin routes exist. Verify UI, role restrictions and event coverage. |
-| 10 | Automated tests prove cross-user isolation | Current backend suite: 26 passed, 0 failed. Expand attack tests and prove each protected route denies unauthorized users. |
+| 10 | Automated tests prove cross-user isolation | Current backend suite: 33 passed, 0 failed (latest reported local run). Expand attack tests and prove each protected route denies unauthorized users. |
 
 ## Required submission items
 

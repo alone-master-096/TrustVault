@@ -1,4 +1,4 @@
-﻿# TrustVault Validation Plan
+# TrustVault Validation Plan
 
 ## Purpose
 Use this checklist to validate the application against the TrustVault
@@ -7,13 +7,14 @@ the frontend hides an action or the project compiles.
 
 ## Build and test baseline
 
-Observed on 2026-10-23 from the reported PowerShell output:
+Observed on 2026-10-25 from the reported PowerShell output:
 
-- Backend tests: 26 passed, 0 failed.
-- Backend TypeScript build: passed.
+- Backend tests: 33 passed, 0 failed.
+- Backend TypeScript production build: passed.
 - Frontend production build: passed.
 
-Repeat these checks after subsequent source changes.
+These are local test/build results, not proof of deployed end-to-end
+authorization. Repeat these checks after subsequent source changes.
 
 ## Authentication and roles
 - [ ] Missing, malformed and expired tokens are rejected.

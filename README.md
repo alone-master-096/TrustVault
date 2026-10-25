@@ -1,4 +1,4 @@
-﻿# TrustVault
+# TrustVault
 
 TrustVault is a document-sharing application with authenticated access, document ownership, per-document read/edit permissions, document downloads, and audit logging.
 
@@ -65,9 +65,9 @@ Do not paste secrets into issues, logs, documentation, or source control. The Su
 
 ## Database
 
-The existing development database has the four tables listed above and the `user_role`, `permission_type`, and `audit_action` enum types. See [Database setup notes](database/README.md).
+The repository includes [`database/schema.sql`](database/schema.sql), a clean-install schema based on read-only inspection of the existing development database. See [`database/README.md`](database/README.md) for setup instructions and validation limitations.
 
-A complete, independently verified fresh-database migration is not currently included. Do not recreate or modify an existing database based only on this documentation.
+The schema has not yet been tested against a separate empty PostgreSQL database. Do not run it against an existing development or production database. Seed/demo-account creation and independent schema validation remain outstanding.
 
 ## Documentation
 
