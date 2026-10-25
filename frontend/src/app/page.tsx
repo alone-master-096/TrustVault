@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 
@@ -13,7 +13,7 @@ const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
 const KEY = "trustvault_token";
 
 function size(n: number) {
-  if (!Number.isFinite(n) || n < 0) return "—";
+  if (!Number.isFinite(n) || n < 0) return "â€”";
   if (n < 1024) return `${n} B`;
   if (n < 1048576) return `${(n / 1024).toFixed(1)} KB`;
   return `${(n / 1048576).toFixed(1)} MB`;
@@ -28,11 +28,11 @@ function kind(d: Doc) {
 }
 function glyph(name: string) {
   const icons: Record<string, string> = {
-    Dashboard: "⌂", "My Documents": "▤", "Shared With Me": "♧",
-    "Recent Activity": "◷", Users: "♙", Permissions: "♧",
-    "Audit Logs": "▦", Settings: "⚙"
+    Dashboard: "âŒ‚", "My Documents": "â–¤", "Shared With Me": "â™§",
+    "Recent Activity": "â—·", Users: "â™™", Permissions: "â™§",
+    "Audit Logs": "â–¦", Settings: "âš™"
   };
-  return icons[name] || "•";
+  return icons[name] || "â€¢";
 }
 
 export default function Home() {
@@ -47,6 +47,61 @@ export default function Home() {
   const [restoring, setRestoring] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const [forgotMode, setForgotMode] = useState(false);
+  const [resetMode, setResetMode] = useState(false);
+  const [resetCode, setResetCode] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [resetLoading, setResetLoading] = useState(false);
+
+  async function requestResetCode(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setError("");
+    setNotice("");
+    setResetLoading(true);
+    try {
+      const response = await fetch(`${API}/api/auth/forgot-password`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.message || "Unable to request a reset code.");
+      setForgotMode(false);
+      setResetMode(true);
+      setNotice(data.message || "If your account exists, a verification code will be sent.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to request a reset code.");
+    } finally {
+      setResetLoading(false);
+    }
+  }
+
+  async function submitPasswordReset(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setError("");
+    setNotice("");
+    setResetLoading(true);
+    try {
+      const response = await fetch(`${API}/api/auth/reset-password`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, code: resetCode, newPassword }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.message || "Password reset failed.");
+      setResetMode(false);
+      setForgotMode(false);
+      setResetCode("");
+      setNewPassword("");
+      setPassword("");
+      setRegisterMode(false);
+      setNotice("Password reset successfully. Sign in using your original email and new password.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Password reset failed.");
+    } finally {
+      setResetLoading(false);
+    }
+  }
   const [tab, setTab] = useState("Dashboard");
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState("All");
@@ -409,22 +464,100 @@ export default function Home() {
   const sharedCount = docs.filter(d => !d.is_owner).length;
   const ownedCount = docs.filter(d => d.is_owner).length;
 
-  if (restoring) return <main className="tv-loading"><div className="tv-brand-icon">T</div><p>Opening your secure vault…</p></main>;
+  if (restoring) return <main className="tv-loading"><div className="tv-brand-icon">T</div><p>Opening your secure vaultâ€¦</p></main>;
 
-  if (!user) return (
+  if (!user && (forgotMode || resetMode)) return (
+  <main className="tv-shell tv-login-screen">
+    <section className="tv-brand-panel">
+      <div className="tv-brand-mark">TV</div>
+      <h1>TrustVault</h1>
+      <p>Your documents. Protected and in your control.</p>
+    </section>
+    <section className="tv-form-panel">
+      <div className="tv-form-wrap">
+        <span className="tv-eyebrow">ACCOUNT RECOVERY</span>
+        <h2>{resetMode ? "Choose a new password" : "Reset your password"}</h2>
+        <p className="tv-muted">
+          {resetMode
+            ? "Enter the six-digit code sent to your registered email and choose a new password."
+            : "Enter the original email address associated with your TrustVault account."}
+        </p>
+        <form className="tv-form" onSubmit={resetMode ? submitPasswordReset : requestResetCode}>
+          <label htmlFor="reset-email">Registered email address</label>
+          <input
+            id="reset-email"
+            type="email"
+            autoComplete="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            required
+            maxLength={255}
+          />
+          {resetMode && <>
+            <label htmlFor="reset-code">Six-digit verification code</label>
+            <input
+              id="reset-code"
+              type="text"
+              inputMode="numeric"
+              autoComplete="one-time-code"
+              pattern="[0-9]{6}"
+              maxLength={6}
+              value={resetCode}
+              onChange={(e) => setResetCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+              required
+            />
+            <label htmlFor="new-password">New password</label>
+            <input
+              id="new-password"
+              type="password"
+              autoComplete="new-password"
+              minLength={8}
+              maxLength={100}
+              value={newPassword}
+              onChange={(e) => setNewPassword(e.target.value)}
+              required
+            />
+          </>}
+          {error && <div className="tv-error" role="alert">{error}</div>}
+          {notice && <div className="tv-security-note" role="status">{notice}</div>}
+          <button className="tv-button" type="submit" disabled={resetLoading}>
+            {resetLoading ? "Please wait..." : resetMode ? "Reset password" : "Send verification code"}
+          </button>
+          <button
+            className="tv-button tv-button-ghost"
+            type="button"
+            disabled={resetLoading}
+            onClick={() => {
+              setForgotMode(false);
+              setResetMode(false);
+              setResetCode("");
+              setNewPassword("");
+              setError("");
+              setNotice("");
+            }}
+          >
+            Back to sign in
+          </button>
+        </form>
+        <div className="tv-security-note">Verification codes expire after 10 minutes.</div>
+      </div>
+    </section>
+  </main>
+);
+if (!user) return (
     <main className="tv-shell tv-login-screen">
       <section className="tv-brand-panel">
-        <div className="tv-brand"><div className="tv-brand-icon">⬡</div><span>TrustVault</span></div>
+        <div className="tv-brand"><div className="tv-brand-icon">â¬¡</div><span>TrustVault</span></div>
         <div className="tv-brand-copy">
           <span className="tv-eyebrow">YOUR TRUSTED DIGITAL VAULT</span>
           <h1>Your documents.<br />Your control.</h1>
           <p>A secure space for managing your digital documents and the people who can access them.</p>
-          <div className="tv-login-pills"><span>✦ Private by design</span><span>⌁ Access control</span></div>
+          <div className="tv-login-pills"><span>âœ¦ Private by design</span><span>âŒ Access control</span></div>
         </div>
         <div className="tv-brand-footer"><span className="tv-status-dot" /> Built for privacy. Designed for trust.</div>
       </section>
       <section className="tv-form-panel"><div className="tv-form-wrap">
-        <div className="tv-mobile-brand"><div className="tv-brand-icon">⬡</div><span>TrustVault</span></div>
+        <div className="tv-mobile-brand"><div className="tv-brand-icon">â¬¡</div><span>TrustVault</span></div>
         <span className="tv-eyebrow">{registerMode ? "CREATE YOUR ACCOUNT" : "WELCOME TO YOUR WORKSPACE"}</span><h2>{registerMode ? "Create your vault account" : "Sign in to your vault"}</h2>
         <p className="tv-muted">{registerMode ? "Create an account to receive documents shared with you." : "Your secure documents are just one step away."}</p>
         <form className="tv-form" onSubmit={registerMode ? registerAccount : login}>
@@ -438,15 +571,24 @@ export default function Home() {
           <input id="password" type="password" autoComplete={registerMode ? "new-password" : "current-password"} placeholder={registerMode ? "At least 8 characters" : "Enter your password"} value={password} onChange={e => setPassword(e.target.value)} required minLength={registerMode ? 8 : 1} maxLength={100} />
           {error && <div className="tv-error" role="alert">{error}</div>}
           {notice && <div className="tv-security-note" role="status">{notice}</div>}
-          <button className="tv-button" type="submit" disabled={loginLoading || registerLoading}>
-            {registerMode ? (registerLoading ? "Creating account…" : "Create account") : (loginLoading ? "Signing in…" : "Sign in securely")} <span>→</span>
+          {!registerMode && <button
+          className="tv-button tv-button-ghost"
+          type="button"
+          onClick={() => {
+            setForgotMode(true);
+            setResetMode(false);
+            setError("");
+            setNotice("");
+          }}
+        >Forgot password?</button>}<button className="tv-button" type="submit" disabled={loginLoading || registerLoading}>
+            {registerMode ? (registerLoading ? "Creating accountâ€¦" : "Create account") : (loginLoading ? "Signing inâ€¦" : "Sign in securely")} <span>â†’</span>
           </button>
           <button className="tv-button tv-button-ghost" type="button" disabled={loginLoading || registerLoading} onClick={() => { setRegisterMode(!registerMode); setError(""); setNotice(""); }}>
             {registerMode ? "Already have an account? Sign in" : "New to TrustVault? Create account"}
           </button>
         </form>
-        <div className="tv-security-note">◆ Your vault is protected by authenticated access.</div>
-      </div><footer className="tv-footer">TrustVault · Secure document management</footer></section>
+        <div className="tv-security-note">â—† Your vault is protected by authenticated access.</div>
+      </div><footer className="tv-footer">TrustVault Â· Secure document management</footer></section>
     </main>
   );
 
@@ -455,53 +597,53 @@ export default function Home() {
   return (
     <main className={`tv-app ${sidebarCollapsed ? "tv-sidebar-collapsed" : ""} ${compactCards ? "tv-compact-cards" : ""} ${!motionEnabled ? "tv-reduce-motion" : ""}`}>
       <aside className="tv-sidebar" onMouseEnter={() => setSidebarCollapsed(false)} onMouseLeave={() => setSidebarCollapsed(true)}>
-        <div className="tv-sidebar-brand-row"><button className="tv-brand tv-brand-button" onClick={() => setTab("Dashboard")}><span className="tv-brand-icon">⬡</span><span className="tv-brand-wordmark">TrustVault</span></button><button className="tv-sidebar-toggle" title={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"} aria-label={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"} onClick={() => setSidebarCollapsed(v => !v)}>{sidebarCollapsed ? "☰" : "‹"}</button></div>
+        <div className="tv-sidebar-brand-row"><button className="tv-brand tv-brand-button" onClick={() => setTab("Dashboard")}><span className="tv-brand-icon">â¬¡</span><span className="tv-brand-wordmark">TrustVault</span></button><button className="tv-sidebar-toggle" title={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"} aria-label={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"} onClick={() => setSidebarCollapsed(v => !v)}>{sidebarCollapsed ? "â˜°" : "â€¹"}</button></div>
         <nav className="tv-nav" aria-label="Main navigation">
           {nav.map(item => <button key={item} title={sidebarCollapsed ? item : undefined} aria-label={item} className={`tv-nav-item ${tab === item ? "active" : ""}`} onClick={() => { setTab(item); setQuery(""); setCategory("All"); }}>
             <span className="tv-nav-glyph">{glyph(item)}</span><span className="tv-nav-label">{item}</span>{item === "Shared With Me" && sharedCount > 0 && <small>{sharedCount}</small>}
           </button>)}
         </nav>
-        <div className="tv-sidebar-promo"><div className="tv-promo-shield">⬡</div><strong>Your files. Your control.</strong><p>TrustVault keeps your data safe, private and always yours.</p><div className="tv-promo-glow" /></div>
+        <div className="tv-sidebar-promo"><div className="tv-promo-shield">â¬¡</div><strong>Your files. Your control.</strong><p>TrustVault keeps your data safe, private and always yours.</p><div className="tv-promo-glow" /></div>
         <div className="tv-sidebar-bottom"><span className="tv-online-dot" /> Secure workspace <span className="tv-version">LOCAL</span></div>
       </aside>
 
       <section className="tv-main">
         <header className="tv-topbar">
-          <label className="tv-global-search"><span>⌕</span><input aria-label="Search documents" placeholder="Search documents, filenames, categories…" value={query} onChange={e => { setQuery(e.target.value); if (tab === "Dashboard") setTab("My Documents"); }} /><kbd>⌘ K</kbd></label>
-          <div className="tv-top-actions"><span className="tv-secure-label"><span className="tv-online-dot" /> Vault secured</span><div className="tv-profile"><div className="tv-avatar">{(user.name || "U").slice(0, 1).toUpperCase()}</div><div><strong>{user.name}</strong><span>{user.role || "User"}</span></div></div><button className="tv-signout" onClick={signOut}>Sign out ↗</button></div>
+          <label className="tv-global-search"><span>âŒ•</span><input aria-label="Search documents" placeholder="Search documents, filenames, categoriesâ€¦" value={query} onChange={e => { setQuery(e.target.value); if (tab === "Dashboard") setTab("My Documents"); }} /><kbd>âŒ˜ K</kbd></label>
+          <div className="tv-top-actions"><span className="tv-secure-label"><span className="tv-online-dot" /> Vault secured</span><div className="tv-profile"><div className="tv-avatar">{(user.name || "U").slice(0, 1).toUpperCase()}</div><div><strong>{user.name}</strong><span>{user.role || "User"}</span></div></div><button className="tv-signout" onClick={signOut}>Sign out â†—</button></div>
         </header>
 
-        {error && <div className="tv-error tv-banner" role="alert"><span>{error}</span><button onClick={() => setError("")}>×</button></div>}
-        {notice && <div className="tv-notice" role="status"><span>✓</span>{notice}<button onClick={() => setNotice("")}>×</button></div>}
+        {error && <div className="tv-error tv-banner" role="alert"><span>{error}</span><button onClick={() => setError("")}>Ã—</button></div>}
+        {notice && <div className="tv-notice" role="status"><span>âœ“</span>{notice}<button onClick={() => setNotice("")}>Ã—</button></div>}
 
         {tab === "Dashboard" && <>
           <section className="tv-hero">
-            <div className="tv-hero-copy"><span className="tv-eyebrow">YOUR SECURE WORKSPACE</span><h1>Welcome back,<br />{user.name.split(" ")[0]}! <span className="tv-wave">✦</span></h1><p>Your secure vault is always ready. Manage your documents, control access and stay productive.</p><div className="tv-hero-actions"><button className="tv-button" onClick={() => setShowUpload(true)}>⇧ Upload document</button><button className="tv-button tv-button-ghost" onClick={() => setTab("My Documents")}>Explore documents ↗</button></div></div>
-            <div className="tv-hero-art" aria-hidden="true"><div className="tv-art-orbit orbit-one" /><div className="tv-art-orbit orbit-two" /><div className="tv-art-mountain mountain-back" /><div className="tv-art-mountain mountain-front" /><div className="tv-art-shield">⬡<span>⌑</span></div><div className="tv-art-caption">SECURE <b>•</b> SHARE <b>•</b> COLLABORATE</div></div>
+            <div className="tv-hero-copy"><span className="tv-eyebrow">YOUR SECURE WORKSPACE</span><h1>Welcome back,<br />{user.name.split(" ")[0]}! <span className="tv-wave">âœ¦</span></h1><p>Your secure vault is always ready. Manage your documents, control access and stay productive.</p><div className="tv-hero-actions"><button className="tv-button" onClick={() => setShowUpload(true)}>â‡§ Upload document</button><button className="tv-button tv-button-ghost" onClick={() => setTab("My Documents")}>Explore documents â†—</button></div></div>
+            <div className="tv-hero-art" aria-hidden="true"><div className="tv-art-orbit orbit-one" /><div className="tv-art-orbit orbit-two" /><div className="tv-art-mountain mountain-back" /><div className="tv-art-mountain mountain-front" /><div className="tv-art-shield">â¬¡<span>âŒ‘</span></div><div className="tv-art-caption">SECURE <b>â€¢</b> SHARE <b>â€¢</b> COLLABORATE</div></div>
           </section>
 
           <section className="tv-stats-grid tv-stats-premium">
-            <article className="tv-stat-card"><div className="tv-stat-top"><span className="tv-stat-icon blue">▤</span><span className="tv-stat-trend">LIVE</span></div><span>Total Documents</span><strong>{docs.length}</strong><small>Owned and shared with you</small><div className="tv-stat-line blue-line" /></article>
-            <article className="tv-stat-card"><div className="tv-stat-top"><span className="tv-stat-icon pink">♧</span><span className="tv-stat-trend">ACCESS</span></div><span>Shared With Me</span><strong>{sharedCount}</strong><small>Documents shared by others</small><div className="tv-stat-line pink-line" /></article>
-            <article className="tv-stat-card"><div className="tv-stat-top"><span className="tv-stat-icon cyan">♙</span><span className="tv-stat-trend">ACCOUNT</span></div><span>Your Role</span><strong className="tv-stat-role">{user.role || "User"}</strong><small>Authenticated workspace</small><div className="tv-stat-line cyan-line" /></article>
-            <article className="tv-stat-card"><div className="tv-stat-top"><span className="tv-stat-icon gold">▤</span><span className="tv-stat-trend">TOTAL</span></div><span>Storage Listed</span><strong>{size(totalBytes)}</strong><small>Combined listed file size</small><div className="tv-stat-line gold-line" /></article>
+            <article className="tv-stat-card"><div className="tv-stat-top"><span className="tv-stat-icon blue">â–¤</span><span className="tv-stat-trend">LIVE</span></div><span>Total Documents</span><strong>{docs.length}</strong><small>Owned and shared with you</small><div className="tv-stat-line blue-line" /></article>
+            <article className="tv-stat-card"><div className="tv-stat-top"><span className="tv-stat-icon pink">â™§</span><span className="tv-stat-trend">ACCESS</span></div><span>Shared With Me</span><strong>{sharedCount}</strong><small>Documents shared by others</small><div className="tv-stat-line pink-line" /></article>
+            <article className="tv-stat-card"><div className="tv-stat-top"><span className="tv-stat-icon cyan">â™™</span><span className="tv-stat-trend">ACCOUNT</span></div><span>Your Role</span><strong className="tv-stat-role">{user.role || "User"}</strong><small>Authenticated workspace</small><div className="tv-stat-line cyan-line" /></article>
+            <article className="tv-stat-card"><div className="tv-stat-top"><span className="tv-stat-icon gold">â–¤</span><span className="tv-stat-trend">TOTAL</span></div><span>Storage Listed</span><strong>{size(totalBytes)}</strong><small>Combined listed file size</small><div className="tv-stat-line gold-line" /></article>
           </section>
 
           <div className="tv-content-grid">
-            <section className="tv-panel tv-recent-panel"><div className="tv-panel-heading"><div><span className="tv-eyebrow">YOUR LIBRARY</span><h2>Recent Documents</h2></div><button className="tv-text-link" onClick={() => setTab("My Documents")}>View all →</button></div>
-              {docs.length === 0 ? <div className="tv-empty"><span className="tv-empty-icon">▤</span><h3>Your vault is ready</h3><p>Upload your first document to get started.</p><button className="tv-button" onClick={() => setShowUpload(true)}>Upload document</button></div> :
+            <section className="tv-panel tv-recent-panel"><div className="tv-panel-heading"><div><span className="tv-eyebrow">YOUR LIBRARY</span><h2>Recent Documents</h2></div><button className="tv-text-link" onClick={() => setTab("My Documents")}>View all â†’</button></div>
+              {docs.length === 0 ? <div className="tv-empty"><span className="tv-empty-icon">â–¤</span><h3>Your vault is ready</h3><p>Upload your first document to get started.</p><button className="tv-button" onClick={() => setShowUpload(true)}>Upload document</button></div> :
                 <div className="tv-recent-table"><div className="tv-table-head"><span>Document</span><span>Type</span><span>Access</span><span>Size</span><span>Actions</span></div>
-                  {docs.slice(0, 6).map((d, i) => <article className="tv-table-row" key={d.id} style={{ animationDelay: `${i * 45}ms` }}><button className={`tv-file-badge badge-${kind(d).toLowerCase()}`} onClick={() => void download(d, true)}>{kind(d)}</button><button className="tv-table-name" onClick={() => void download(d, true)}><strong>{d.name}</strong><span>{d.original_filename}</span></button><span className="tv-table-type">{kind(d)}</span><span className="tv-table-access">{d.is_owner ? "Owner" : d.access_permission}</span><span className="tv-table-size">{size(d.file_size)}</span><div className="tv-row-actions">{d.is_owner && <button title="Share document" onClick={() => { setShowShare(d); setRecipients([]); setRecipientQuery(""); }}>♧</button>}<button title="Download" onClick={() => void download(d)}>↓</button></div></article>)}
+                  {docs.slice(0, 6).map((d, i) => <article className="tv-table-row" key={d.id} style={{ animationDelay: `${i * 45}ms` }}><button className={`tv-file-badge badge-${kind(d).toLowerCase()}`} onClick={() => void download(d, true)}>{kind(d)}</button><button className="tv-table-name" onClick={() => void download(d, true)}><strong>{d.name}</strong><span>{d.original_filename}</span></button><span className="tv-table-type">{kind(d)}</span><span className="tv-table-access">{d.is_owner ? "Owner" : d.access_permission}</span><span className="tv-table-size">{size(d.file_size)}</span><div className="tv-row-actions">{d.is_owner && <button title="Share document" onClick={() => { setShowShare(d); setRecipients([]); setRecipientQuery(""); }}>â™§</button>}<button title="Download" onClick={() => void download(d)}>â†“</button></div></article>)}
                 </div>}
             </section>
             <aside className="tv-side-stack">
-              <section className="tv-panel"><div className="tv-panel-heading"><div><span className="tv-eyebrow">SHORTCUTS</span><h2>Quick Actions</h2></div><span className="tv-panel-symbol">✧</span></div>
-                <button className="tv-quick-action" onClick={() => setShowUpload(true)}><span className="quick-icon blue">⇧</span><span><strong>Upload document</strong><small>Add a file to your vault</small></span><b>→</b></button>
-                <button className="tv-quick-action" onClick={() => setTab("My Documents")}><span className="quick-icon purple">▤</span><span><strong>Browse documents</strong><small>Search your library</small></span><b>→</b></button>
-                <button className="tv-quick-action" onClick={() => { setTab("Shared With Me"); setQuery(""); }}><span className="quick-icon cyan">♧</span><span><strong>Shared with me</strong><small>{sharedCount} available documents</small></span><b>→</b></button>
-                <button className="tv-quick-action" onClick={() => { const token = sessionStorage.getItem(KEY); if (token) void loadDocs(token).then(() => setNotice("Document library refreshed.")).catch(e => setError(e.message)); }}><span className="quick-icon gold">↻</span><span><strong>Refresh library</strong><small>Sync current document list</small></span><b>→</b></button>
+              <section className="tv-panel"><div className="tv-panel-heading"><div><span className="tv-eyebrow">SHORTCUTS</span><h2>Quick Actions</h2></div><span className="tv-panel-symbol">âœ§</span></div>
+                <button className="tv-quick-action" onClick={() => setShowUpload(true)}><span className="quick-icon blue">â‡§</span><span><strong>Upload document</strong><small>Add a file to your vault</small></span><b>â†’</b></button>
+                <button className="tv-quick-action" onClick={() => setTab("My Documents")}><span className="quick-icon purple">â–¤</span><span><strong>Browse documents</strong><small>Search your library</small></span><b>â†’</b></button>
+                <button className="tv-quick-action" onClick={() => { setTab("Shared With Me"); setQuery(""); }}><span className="quick-icon cyan">â™§</span><span><strong>Shared with me</strong><small>{sharedCount} available documents</small></span><b>â†’</b></button>
+                <button className="tv-quick-action" onClick={() => { const token = sessionStorage.getItem(KEY); if (token) void loadDocs(token).then(() => setNotice("Document library refreshed.")).catch(e => setError(e.message)); }}><span className="quick-icon gold">â†»</span><span><strong>Refresh library</strong><small>Sync current document list</small></span><b>â†’</b></button>
               </section>
-              <section className="tv-security-panel"><div className="tv-security-emblem">⬡</div><div><span className="tv-eyebrow">SECURITY FIRST</span><h3>Your vault. Your rules.</h3><p>Document access is checked by the server against your current permissions.</p></div><div className="tv-security-chips"><span>◈ Authenticated</span><span>⌁ Access control</span><span>◷ Protected routes</span></div><div className="tv-security-foot"><span className="tv-online-dot" /> Session status: active</div></section>
+              <section className="tv-security-panel"><div className="tv-security-emblem">â¬¡</div><div><span className="tv-eyebrow">SECURITY FIRST</span><h3>Your vault. Your rules.</h3><p>Document access is checked by the server against your current permissions.</p></div><div className="tv-security-chips"><span>â—ˆ Authenticated</span><span>âŒ Access control</span><span>â—· Protected routes</span></div><div className="tv-security-foot"><span className="tv-online-dot" /> Session status: active</div></section>
             </aside>
           </div>
         </>}
@@ -509,28 +651,28 @@ export default function Home() {
         {tab !== "Dashboard" && <>
           <section className="tv-page-heading"><span className="tv-eyebrow">TRUSTVAULT WORKSPACE</span><h1>{tab}</h1><p>{tab === "Shared With Me" ? "Documents other users have shared with your account." : tab === "My Documents" ? "Browse, filter, preview and manage your secure document library." : "Your secure document workspace and account controls."}</p></section>
           {(tab === "My Documents" || tab === "Shared With Me" || tab === "Recent Activity") ? <>
-            <section className="tv-panel tv-library-panel"><div className="tv-panel-heading"><div><span className="tv-eyebrow">DOCUMENT LIBRARY</span><h2>{tab === "Shared With Me" ? "Shared documents" : tab === "Recent Activity" ? "Recently updated documents" : "All available documents"} <span className="tv-count">{filtered.length}</span></h2></div><button className="tv-button" onClick={() => setShowUpload(true)}>＋ Upload</button></div>
-              <div className="tv-library-toolbar"><input className="tv-library-search" placeholder="Search documents…" value={query} onChange={e => setQuery(e.target.value)} /><select value={category} onChange={e => setCategory(e.target.value)} aria-label="Filter category">{categories.map(c => <option key={c}>{c}</option>)}</select><div className="tv-view-switch"><button className={view === "grid" ? "active" : ""} onClick={() => setView("grid")}>▦ Grid</button><button className={view === "list" ? "active" : ""} onClick={() => setView("list")}>☷ List</button></div></div>
-              {filtered.length === 0 ? <div className="tv-empty"><span className="tv-empty-icon">▤</span><h3>No matching documents</h3><p>Try another search or category, or upload a new document.</p><button className="tv-button" onClick={() => { setQuery(""); setCategory("All"); setShowUpload(true); }}>＋ Add document</button></div> :
+            <section className="tv-panel tv-library-panel"><div className="tv-panel-heading"><div><span className="tv-eyebrow">DOCUMENT LIBRARY</span><h2>{tab === "Shared With Me" ? "Shared documents" : tab === "Recent Activity" ? "Recently updated documents" : "All available documents"} <span className="tv-count">{filtered.length}</span></h2></div><button className="tv-button" onClick={() => setShowUpload(true)}>ï¼‹ Upload</button></div>
+              <div className="tv-library-toolbar"><input className="tv-library-search" placeholder="Search documentsâ€¦" value={query} onChange={e => setQuery(e.target.value)} /><select value={category} onChange={e => setCategory(e.target.value)} aria-label="Filter category">{categories.map(c => <option key={c}>{c}</option>)}</select><div className="tv-view-switch"><button className={view === "grid" ? "active" : ""} onClick={() => setView("grid")}>â–¦ Grid</button><button className={view === "list" ? "active" : ""} onClick={() => setView("list")}>â˜· List</button></div></div>
+              {filtered.length === 0 ? <div className="tv-empty"><span className="tv-empty-icon">â–¤</span><h3>No matching documents</h3><p>Try another search or category, or upload a new document.</p><button className="tv-button" onClick={() => { setQuery(""); setCategory("All"); setShowUpload(true); }}>ï¼‹ Add document</button></div> :
                 <div className={view === "grid" ? "tv-doc-grid" : "tv-doc-list"}>
-                  {filtered.map(d => <article className="tv-library-doc" key={d.id}><button className={`tv-file-badge badge-${kind(d).toLowerCase()}`} onClick={() => void download(d, true)}>{kind(d)}</button><div className="tv-library-doc-info"><strong>{d.name}</strong><span>{d.original_filename}</span><div className="tv-doc-tags"><span>{d.category || "Uncategorized"}</span><span>{d.is_owner ? "Owner" : `${d.access_permission} access`}</span><span>{size(d.file_size)}</span></div></div><div className="tv-library-actions">{d.is_owner && <button onClick={() => { setShowShare(d); setRecipients([]); setRecipientQuery(""); }}>Share</button>} {d.is_owner && <button onClick={() => void deleteDocument(d)} style={{ color: "#b91c1c" }}>Delete</button>}<button onClick={() => void download(d, true)}>Preview</button><button onClick={() => void download(d)}>↓</button></div></article>)}
+                  {filtered.map(d => <article className="tv-library-doc" key={d.id}><button className={`tv-file-badge badge-${kind(d).toLowerCase()}`} onClick={() => void download(d, true)}>{kind(d)}</button><div className="tv-library-doc-info"><strong>{d.name}</strong><span>{d.original_filename}</span><div className="tv-doc-tags"><span>{d.category || "Uncategorized"}</span><span>{d.is_owner ? "Owner" : `${d.access_permission} access`}</span><span>{size(d.file_size)}</span></div></div><div className="tv-library-actions">{d.is_owner && <button onClick={() => { setShowShare(d); setRecipients([]); setRecipientQuery(""); }}>Share</button>} {d.is_owner && <button onClick={() => void deleteDocument(d)} style={{ color: "#b91c1c" }}>Delete</button>}<button onClick={() => void download(d, true)}>Preview</button><button onClick={() => void download(d)}>â†“</button></div></article>)}
                 </div>}
             </section>
           </> : tab === "Users" ? <section className="tv-panel tv-workflow-panel">
-            <div className="tv-panel-heading"><div><span className="tv-eyebrow">WORKSPACE DIRECTORY</span><h2>Find workspace users</h2><p>Search existing accounts before sharing documents with them.</p></div><span className="tv-panel-symbol">♙</span></div>
-            <form className="tv-directory-search" onSubmit={e => { e.preventDefault(); void loadDirectoryUsers(); }}><input aria-label="Search users" placeholder="Enter a name or email (2+ characters)" value={directoryQuery} onChange={e => setDirectoryQuery(e.target.value)} /><button className="tv-button" type="submit" disabled={directoryLoading}>{directoryLoading ? "Searching…" : "Search users →"}</button></form>
-            {directoryUsers.length > 0 ? <div className="tv-directory-list">{directoryUsers.map(u => <article className="tv-directory-user" key={u.id}><div className="tv-avatar">{(u.name || "U").slice(0,1).toUpperCase()}</div><div className="tv-directory-user-main"><strong>{u.name}</strong><span>{u.email}</span></div><span className="tv-role-pill">{u.role || "User"}</span><button className="tv-text-link" onClick={() => { const owned = docs.find(d => d.is_owner); if (owned) { setShowShare(owned); setRecipients([u]); setRecipient(u.id); setRecipientQuery(`${u.name} ${u.email}`); setPermission(defaultPermission); setShareMode("grant"); } else { setError("Upload a document first, then share it with this user."); } }}>Share a file →</button></article>)}</div> : <div className="tv-empty"><span className="tv-empty-icon">♙</span><h3>Search for a user</h3><p>Enter at least two characters to find active accounts. User creation and role administration are not exposed by the current user-search endpoint.</p></div>}
+            <div className="tv-panel-heading"><div><span className="tv-eyebrow">WORKSPACE DIRECTORY</span><h2>Find workspace users</h2><p>Search existing accounts before sharing documents with them.</p></div><span className="tv-panel-symbol">â™™</span></div>
+            <form className="tv-directory-search" onSubmit={e => { e.preventDefault(); void loadDirectoryUsers(); }}><input aria-label="Search users" placeholder="Enter a name or email (2+ characters)" value={directoryQuery} onChange={e => setDirectoryQuery(e.target.value)} /><button className="tv-button" type="submit" disabled={directoryLoading}>{directoryLoading ? "Searchingâ€¦" : "Search users â†’"}</button></form>
+            {directoryUsers.length > 0 ? <div className="tv-directory-list">{directoryUsers.map(u => <article className="tv-directory-user" key={u.id}><div className="tv-avatar">{(u.name || "U").slice(0,1).toUpperCase()}</div><div className="tv-directory-user-main"><strong>{u.name}</strong><span>{u.email}</span></div><span className="tv-role-pill">{u.role || "User"}</span><button className="tv-text-link" onClick={() => { const owned = docs.find(d => d.is_owner); if (owned) { setShowShare(owned); setRecipients([u]); setRecipient(u.id); setRecipientQuery(`${u.name} ${u.email}`); setPermission(defaultPermission); setShareMode("grant"); } else { setError("Upload a document first, then share it with this user."); } }}>Share a file â†’</button></article>)}</div> : <div className="tv-empty"><span className="tv-empty-icon">â™™</span><h3>Search for a user</h3><p>Enter at least two characters to find active accounts. User creation and role administration are not exposed by the current user-search endpoint.</p></div>}
           </section> : tab === "Permissions" ? <section className="tv-panel tv-workflow-panel">
-            <div className="tv-panel-heading"><div><span className="tv-eyebrow">ACCESS CONTROL</span><h2>Document permissions</h2><p>Manage read/edit access using the existing secure sharing workflow.</p></div><span className="tv-panel-symbol">♧</span></div>
-            {docs.filter(d => d.is_owner).length > 0 ? <div className="tv-permission-list">{docs.filter(d => d.is_owner).map(d => <article className="tv-permission-document" key={d.id}><span className={`tv-file-badge badge-${kind(d).toLowerCase()}`}>{kind(d)}</span><div className="tv-permission-document-main"><strong>{d.name}</strong><span>{d.original_filename} · {size(d.file_size)}</span><small>Current access: owner</small></div><button className="tv-button" onClick={() => { setShowShare(d); setRecipients([]); setRecipientQuery(""); setRecipient(""); setShareMode("grant"); }}>Manage access →</button></article>)}</div> : <div className="tv-empty"><span className="tv-empty-icon">♧</span><h3>No owned documents yet</h3><p>Upload a document to grant or revoke user access from here.</p><button className="tv-button" onClick={() => setShowUpload(true)}>＋ Upload document</button></div>}
-            <div className="tv-permission-footnote">Permission changes are submitted to the existing backend endpoint and enforced by the server. Select “Manage access” to grant READ/EDIT or revoke access.</div>
+            <div className="tv-panel-heading"><div><span className="tv-eyebrow">ACCESS CONTROL</span><h2>Document permissions</h2><p>Manage read/edit access using the existing secure sharing workflow.</p></div><span className="tv-panel-symbol">â™§</span></div>
+            {docs.filter(d => d.is_owner).length > 0 ? <div className="tv-permission-list">{docs.filter(d => d.is_owner).map(d => <article className="tv-permission-document" key={d.id}><span className={`tv-file-badge badge-${kind(d).toLowerCase()}`}>{kind(d)}</span><div className="tv-permission-document-main"><strong>{d.name}</strong><span>{d.original_filename} Â· {size(d.file_size)}</span><small>Current access: owner</small></div><button className="tv-button" onClick={() => { setShowShare(d); setRecipients([]); setRecipientQuery(""); setRecipient(""); setShareMode("grant"); }}>Manage access â†’</button></article>)}</div> : <div className="tv-empty"><span className="tv-empty-icon">â™§</span><h3>No owned documents yet</h3><p>Upload a document to grant or revoke user access from here.</p><button className="tv-button" onClick={() => setShowUpload(true)}>ï¼‹ Upload document</button></div>}
+            <div className="tv-permission-footnote">Permission changes are submitted to the existing backend endpoint and enforced by the server. Select â€œManage accessâ€ to grant READ/EDIT or revoke access.</div>
           </section> : tab === "Audit Logs" ? <section className="tv-panel tv-workflow-panel">
-            <div className="tv-panel-heading"><div><span className="tv-eyebrow">SECURITY HISTORY</span><h2>Audit logs</h2><p>Recent recorded activity associated with your account and owned documents.</p></div><button className="tv-button tv-button-ghost" onClick={() => void loadAuditLogs()} disabled={auditLoading}>{auditLoading ? "Refreshing…" : "↻ Refresh"}</button></div>
-            {!["owner", "admin"].includes(user.role.toLowerCase()) ? <div className="tv-empty"><h3>Restricted section</h3><p>Your current role does not have permission to view audit logs.</p></div> : auditLogs.length === 0 ? <div className="tv-empty"><span className="tv-empty-icon">◷</span><h3>{auditLoading ? "Loading activity…" : "No audit events found"}</h3><p>Recorded sign-ins, document changes and permission updates will appear here when available.</p></div> : <div className="tv-audit-list">{auditLogs.map(log => <article className="tv-audit-row" key={log.id}><span className={`tv-audit-status ${log.success === false ? "failed" : ""}`}>{log.success === false ? "!" : "✓"}</span><div className="tv-audit-main"><strong>{(log.action || "activity").replace(/_/g, " ")}</strong><span>{log.user_name || log.user_email || "Workspace user"}{log.document_id ? ` · Document ${log.document_id}` : ""}</span>{log.details != null && <small>{typeof log.details === "string" ? log.details : JSON.stringify(log.details)}</small>}</div><time>{log.created_at ? new Date(log.created_at).toLocaleString() : "—"}</time></article>)}</div>}
+            <div className="tv-panel-heading"><div><span className="tv-eyebrow">SECURITY HISTORY</span><h2>Audit logs</h2><p>Recent recorded activity associated with your account and owned documents.</p></div><button className="tv-button tv-button-ghost" onClick={() => void loadAuditLogs()} disabled={auditLoading}>{auditLoading ? "Refreshingâ€¦" : "â†» Refresh"}</button></div>
+            {!["owner", "admin"].includes(user.role.toLowerCase()) ? <div className="tv-empty"><h3>Restricted section</h3><p>Your current role does not have permission to view audit logs.</p></div> : auditLogs.length === 0 ? <div className="tv-empty"><span className="tv-empty-icon">â—·</span><h3>{auditLoading ? "Loading activityâ€¦" : "No audit events found"}</h3><p>Recorded sign-ins, document changes and permission updates will appear here when available.</p></div> : <div className="tv-audit-list">{auditLogs.map(log => <article className="tv-audit-row" key={log.id}><span className={`tv-audit-status ${log.success === false ? "failed" : ""}`}>{log.success === false ? "!" : "âœ“"}</span><div className="tv-audit-main"><strong>{(log.action || "activity").replace(/_/g, " ")}</strong><span>{log.user_name || log.user_email || "Workspace user"}{log.document_id ? ` Â· Document ${log.document_id}` : ""}</span>{log.details != null && <small>{typeof log.details === "string" ? log.details : JSON.stringify(log.details)}</small>}</div><time>{log.created_at ? new Date(log.created_at).toLocaleString() : "â€”"}</time></article>)}</div>}
           </section> : <section className="tv-settings-page">
             <div className="tv-settings-hero">
               <div><span className="tv-eyebrow">WORKSPACE CONTROL CENTER</span><h2>Settings</h2><p>Make TrustVault feel right for the way you work.</p></div>
-              <div className="tv-settings-hero-icon">⚙</div>
+              <div className="tv-settings-hero-icon">âš™</div>
             </div>
             <div className="tv-settings-profile tv-settings-profile-new">
               <div className="tv-avatar">{(user.name || "U").slice(0,1).toUpperCase()}</div>
@@ -540,7 +682,7 @@ export default function Home() {
             </div>
             <div className="tv-settings-grid">
               <article className="tv-setting-card tv-setting-appearance">
-                <div className="tv-setting-card-head"><span className="tv-setting-card-icon">◐</span><div><span className="tv-setting-kicker">LOOK & FEEL</span><h3>Appearance</h3><p>Shape your workspace experience.</p></div></div>
+                <div className="tv-setting-card-head"><span className="tv-setting-card-icon">â—</span><div><span className="tv-setting-kicker">LOOK & FEEL</span><h3>Appearance</h3><p>Shape your workspace experience.</p></div></div>
                 <div className="tv-setting-card-body">
                   <div className="tv-setting-control"><div><strong>Compact document cards</strong><small>Fit more files on screen</small></div><button type="button" role="switch" aria-label="Compact document cards" aria-checked={compactCards} className={`tv-switch ${compactCards ? "on" : ""}`} onClick={() => setCompactCards(v => !v)}><span /></button></div>
                   <div className="tv-setting-control"><div><strong>Interface animations</strong><small>Enable subtle motion effects</small></div><button type="button" role="switch" aria-label="Interactive animations" aria-checked={motionEnabled} className={`tv-switch ${motionEnabled ? "on" : ""}`} onClick={() => setMotionEnabled(v => !v)}><span /></button></div>
@@ -548,15 +690,15 @@ export default function Home() {
                 </div>
               </article>
               <article className="tv-setting-card tv-setting-documents">
-                <div className="tv-setting-card-head"><span className="tv-setting-card-icon">▤</span><div><span className="tv-setting-kicker">FILE WORKFLOW</span><h3>Document Defaults</h3><p>Choose how files are shared and sorted.</p></div></div>
+                <div className="tv-setting-card-head"><span className="tv-setting-card-icon">â–¤</span><div><span className="tv-setting-kicker">FILE WORKFLOW</span><h3>Document Defaults</h3><p>Choose how files are shared and sorted.</p></div></div>
                 <div className="tv-setting-card-body">
                   <label className="tv-setting-field"><span><strong>Default sharing access</strong><small>Used when opening Share</small></span><select className="tv-settings-select" aria-label="Default sharing permission" value={defaultPermission} onChange={e => { const v = e.target.value as "read" | "edit"; setDefaultPermission(v); setPermission(v); }}><option value="read">Read only</option><option value="edit">Can edit</option></select></label>
-                  <label className="tv-setting-field"><span><strong>Library sorting</strong><small>Preferred document order</small></span><select className="tv-settings-select" aria-label="Default document sorting" value={defaultSort} onChange={e => setDefaultSort(e.target.value)}><option value="newest">Newest first</option><option value="oldest">Oldest first</option><option value="name">Name (A–Z)</option><option value="largest">Largest first</option></select></label>
+                  <label className="tv-setting-field"><span><strong>Library sorting</strong><small>Preferred document order</small></span><select className="tv-settings-select" aria-label="Default document sorting" value={defaultSort} onChange={e => setDefaultSort(e.target.value)}><option value="newest">Newest first</option><option value="oldest">Oldest first</option><option value="name">Name (Aâ€“Z)</option><option value="largest">Largest first</option></select></label>
                   <div className="tv-setting-card-foot">Changes apply to your local preferences.</div>
                 </div>
               </article>
               <article className="tv-setting-card tv-setting-notifications">
-                <div className="tv-setting-card-head"><span className="tv-setting-card-icon">♧</span><div><span className="tv-setting-kicker">STAY INFORMED</span><h3>Notifications</h3><p>Choose which activity preferences are enabled.</p></div></div>
+                <div className="tv-setting-card-head"><span className="tv-setting-card-icon">â™§</span><div><span className="tv-setting-kicker">STAY INFORMED</span><h3>Notifications</h3><p>Choose which activity preferences are enabled.</p></div></div>
                 <div className="tv-setting-card-body">
                   <div className="tv-setting-control"><div><strong>Document sharing</strong><small>Preference for sharing alerts</small></div><button type="button" role="switch" aria-label="Document sharing updates" aria-checked={notifyShares} className={`tv-switch ${notifyShares ? "on" : ""}`} onClick={() => setNotifyShares(v => !v)}><span /></button></div>
                   <div className="tv-setting-control"><div><strong>Permission changes</strong><small>Preference for access-change alerts</small></div><button type="button" role="switch" aria-label="Permission change updates" aria-checked={notifyPermissionChanges} className={`tv-switch ${notifyPermissionChanges ? "on" : ""}`} onClick={() => setNotifyPermissionChanges(v => !v)}><span /></button></div>
@@ -564,15 +706,15 @@ export default function Home() {
                 </div>
               </article>
               <article className="tv-setting-card tv-setting-security">
-                <div className="tv-setting-card-head"><span className="tv-setting-card-icon">⬡</span><div><span className="tv-setting-kicker">IDENTITY & ACCESS</span><h3>Account & Security</h3><p>Your signed-in identity and session.</p></div></div>
+                <div className="tv-setting-card-head"><span className="tv-setting-card-icon">â¬¡</span><div><span className="tv-setting-kicker">IDENTITY & ACCESS</span><h3>Account & Security</h3><p>Your signed-in identity and session.</p></div></div>
                 <div className="tv-setting-card-body">
-                  <div className="tv-security-identity"><div className="tv-avatar">{(user.name || "U").slice(0,1).toUpperCase()}</div><div><strong>{user.name}</strong><small>{user.email}</small></div><span className="tv-session-badge">● ACTIVE</span></div>
+                  <div className="tv-security-identity"><div className="tv-avatar">{(user.name || "U").slice(0,1).toUpperCase()}</div><div><strong>{user.name}</strong><small>{user.email}</small></div><span className="tv-session-badge">â— ACTIVE</span></div>
                   <div className="tv-setting-control"><div><strong>Account role</strong><small>Managed by your workspace</small></div><span className="tv-role-pill">{user.role}</span></div>
-                  <button type="button" className="tv-button tv-button-ghost tv-settings-signout" onClick={signOut}>Sign out of TrustVault ↗</button>
+                  <button type="button" className="tv-button tv-button-ghost tv-settings-signout" onClick={signOut}>Sign out of TrustVault â†—</button>
                 </div>
               </article>
             </div>
-            <div className="tv-settings-bottom"><span>🔒 Your account and access rules remain protected by the server.</span><button className="tv-button tv-button-ghost" onClick={() => { setCompactCards(false); setMotionEnabled(true); setSidebarCollapsed(true); setDefaultPermission("read"); setPermission("read"); setNotifyShares(true); setNotifyPermissionChanges(true); setDefaultSort("newest"); }}>Reset preferences</button></div>
+            <div className="tv-settings-bottom"><span>ðŸ”’ Your account and access rules remain protected by the server.</span><button className="tv-button tv-button-ghost" onClick={() => { setCompactCards(false); setMotionEnabled(true); setSidebarCollapsed(true); setDefaultPermission("read"); setPermission("read"); setNotifyShares(true); setNotifyPermissionChanges(true); setDefaultSort("newest"); }}>Reset preferences</button></div>
           </section>}
         </>}
 
@@ -583,44 +725,44 @@ export default function Home() {
           <div className="tv-premium-footer-inner">
             <div className="tv-footer-main">
               <div className="tv-footer-brand">
-                <div className="tv-footer-brand-lockup"><span className="tv-footer-logo">⬡</span><span>TrustVault</span></div>
+                <div className="tv-footer-brand-lockup"><span className="tv-footer-logo">â¬¡</span><span>TrustVault</span></div>
                 <p>Your digital world, protected.</p><p className="tv-footer-brand-copy">Secure document management. Private by design. Your files stay under your control.</p>
-                <div className="tv-footer-socials" aria-label="Official social links"><a href="https://www.linkedin.com/in/pernapati-sri-gopi-014b6a348/" target="_blank" rel="noopener noreferrer" aria-label="LinkedIn" title="LinkedIn">in</a><a href="https://github.com/alone-master-096" target="_blank" rel="noopener noreferrer" aria-label="GitHub" title="GitHub">⌘</a><a href="mailto:pernapatsrigopi@gmail.com" aria-label="Email TrustVault" title="Email">✉</a></div>
+                <div className="tv-footer-socials" aria-label="Official social links"><a href="https://www.linkedin.com/in/pernapati-sri-gopi-014b6a348/" target="_blank" rel="noopener noreferrer" aria-label="LinkedIn" title="LinkedIn">in</a><a href="https://github.com/alone-master-096" target="_blank" rel="noopener noreferrer" aria-label="GitHub" title="GitHub">âŒ˜</a><a href="mailto:pernapatsrigopi@gmail.com" aria-label="Email TrustVault" title="Email">âœ‰</a></div>
               </div>
-              <div className="tv-footer-column"><h3><span>◇</span> Product</h3>
-                <button onClick={() => setTab("Dashboard")}>Dashboard <span>↗</span></button><button onClick={() => setTab("My Documents")}>Documents <span>↗</span></button><button onClick={() => setTab("Shared With Me")}>Shared with me <span>↗</span></button><button onClick={() => setTab("Recent Activity")}>Recent activity <span>↗</span></button><button onClick={() => setTab("Users")}>Users &amp; permissions <span>↗</span></button><button onClick={() => setTab("Audit Logs")}>Audit logs <span>↗</span></button>
+              <div className="tv-footer-column"><h3><span>â—‡</span> Product</h3>
+                <button onClick={() => setTab("Dashboard")}>Dashboard <span>â†—</span></button><button onClick={() => setTab("My Documents")}>Documents <span>â†—</span></button><button onClick={() => setTab("Shared With Me")}>Shared with me <span>â†—</span></button><button onClick={() => setTab("Recent Activity")}>Recent activity <span>â†—</span></button><button onClick={() => setTab("Users")}>Users &amp; permissions <span>â†—</span></button><button onClick={() => setTab("Audit Logs")}>Audit logs <span>â†—</span></button>
               </div>
-              <div className="tv-footer-column"><h3><span>▤</span> Resources</h3>
-                <button onClick={() => setFooterInfo("Help Center")}>Help Center <span>↗</span></button><button onClick={() => setFooterInfo("FAQs")}>FAQs <span>↗</span></button><button onClick={() => setFooterInfo("Security")}>Security <span>↗</span></button><button onClick={() => setFooterInfo("Contact Support")}>Contact Support <span>↗</span></button>
+              <div className="tv-footer-column"><h3><span>â–¤</span> Resources</h3>
+                <button onClick={() => setFooterInfo("Help Center")}>Help Center <span>â†—</span></button><button onClick={() => setFooterInfo("FAQs")}>FAQs <span>â†—</span></button><button onClick={() => setFooterInfo("Security")}>Security <span>â†—</span></button><button onClick={() => setFooterInfo("Contact Support")}>Contact Support <span>â†—</span></button>
               </div>
-              <div className="tv-footer-column"><h3><span>⌂</span> Company</h3>
-                <button onClick={() => setFooterInfo("About TrustVault")}>About TrustVault <span>↗</span></button><button onClick={() => setFooterInfo("Our Mission")}>Our Mission <span>↗</span></button><button onClick={() => setFooterInfo("Careers")}>Careers <span>↗</span></button><button onClick={() => setFooterInfo("Contact Us")}>Contact Us <span>↗</span></button>
+              <div className="tv-footer-column"><h3><span>âŒ‚</span> Company</h3>
+                <button onClick={() => setFooterInfo("About TrustVault")}>About TrustVault <span>â†—</span></button><button onClick={() => setFooterInfo("Our Mission")}>Our Mission <span>â†—</span></button><button onClick={() => setFooterInfo("Careers")}>Careers <span>â†—</span></button><button onClick={() => setFooterInfo("Contact Us")}>Contact Us <span>â†—</span></button>
               </div>
-              <div className="tv-footer-column"><h3><span>⛨</span> Legal</h3>
-                <button onClick={() => setFooterInfo("Privacy Policy")}>Privacy Policy <span>↗</span></button><button onClick={() => setFooterInfo("Terms of Service")}>Terms of Service <span>↗</span></button><button onClick={() => setFooterInfo("Cookie Policy")}>Cookie Policy <span>↗</span></button>
+              <div className="tv-footer-column"><h3><span>â›¨</span> Legal</h3>
+                <button onClick={() => setFooterInfo("Privacy Policy")}>Privacy Policy <span>â†—</span></button><button onClick={() => setFooterInfo("Terms of Service")}>Terms of Service <span>â†—</span></button><button onClick={() => setFooterInfo("Cookie Policy")}>Cookie Policy <span>â†—</span></button>
               </div>
-              <div className="tv-footer-support"><div className="tv-footer-support-icon">✦</div><span className="tv-footer-support-eyebrow">HERE FOR YOU</span><h3>Need help?</h3><p>Find answers to common questions or learn how to get assistance with your vault.</p><button onClick={() => setFooterInfo("Contact Support")}>Contact Support <span>→</span></button><button className="tv-footer-faq-cta" onClick={() => setFooterInfo("FAQs")}>Browse FAQs <span>→</span></button><div className="tv-footer-support-status"><span></span> Your vault. Your control.</div></div>
+              <div className="tv-footer-support"><div className="tv-footer-support-icon">âœ¦</div><span className="tv-footer-support-eyebrow">HERE FOR YOU</span><h3>Need help?</h3><p>Find answers to common questions or learn how to get assistance with your vault.</p><button onClick={() => setFooterInfo("Contact Support")}>Contact Support <span>â†’</span></button><button className="tv-footer-faq-cta" onClick={() => setFooterInfo("FAQs")}>Browse FAQs <span>â†’</span></button><div className="tv-footer-support-status"><span></span> Your vault. Your control.</div></div>
             </div>
             <div className="tv-footer-security-strip"><span><span className="tv-footer-live-dot"></span> ACCESS CONTROLLED</span><span>Designed for safer document management</span><span>{docs.length} document{docs.length === 1 ? "" : "s"} in your workspace</span></div>
-            <div className="tv-footer-bottom"><span>© {new Date().getFullYear()} TrustVault. All rights reserved.</span><span className="tv-footer-bottom-motto"><span>⬡</span> Built for a safer digital tomorrow.</span></div>
+            <div className="tv-footer-bottom"><span>Â© {new Date().getFullYear()} TrustVault. All rights reserved.</span><span className="tv-footer-bottom-motto"><span>â¬¡</span> Built for a safer digital tomorrow.</span></div>
           </div>
         </footer>
         {footerInfo && <div className="tv-modal-backdrop tv-footer-info-backdrop" onMouseDown={e => { if (e.target === e.currentTarget) setFooterInfo(null); }}>
           <section className="tv-modal tv-footer-info-modal" role="dialog" aria-modal="true" aria-labelledby="tv-footer-info-title">
-            <div className="tv-modal-head"><div><span className="tv-eyebrow">TRUSTVAULT RESOURCE</span><h2 id="tv-footer-info-title">{footerInfo}</h2></div><button className="tv-modal-close" onClick={() => setFooterInfo(null)} aria-label="Close">×</button></div>
+            <div className="tv-modal-head"><div><span className="tv-eyebrow">TRUSTVAULT RESOURCE</span><h2 id="tv-footer-info-title">{footerInfo}</h2></div><button className="tv-modal-close" onClick={() => setFooterInfo(null)} aria-label="Close">Ã—</button></div>
             {footerInfo === "FAQs" ? <div className="tv-footer-faq-list">
               <details open><summary>How do I upload a document?</summary><p>Choose Upload document from the dashboard, select a supported file, add its details, and submit. The server validates uploads.</p></details>
               <details><summary>How do I share a document?</summary><p>Open a document's Share action, search for an active user, choose the access action and permission level, then confirm.</p></details>
               <details><summary>What is the difference between Read and Edit?</summary><p>Read is intended for viewing. Edit permits viewing and modifying where the document's permissions and server rules allow it.</p></details>
               <details><summary>Where can I review activity?</summary><p>Open Audit Logs or Recent Activity from the sidebar to review the activity available to your account.</p></details>
               <details><summary>How do I revoke access?</summary><p>Open Share for the relevant document, find the active user, select Revoke access, and submit the change.</p></details>
-              <details><summary>Why can’t I access a document?</summary><p>Confirm you are signed in to the correct account and that the owner has granted access. If the problem remains, contact your TrustVault administrator.</p></details>
+              <details><summary>Why canâ€™t I access a document?</summary><p>Confirm you are signed in to the correct account and that the owner has granted access. If the problem remains, contact your TrustVault administrator.</p></details>
             </div> : <div className="tv-footer-info-copy">
               {footerInfo === "Help Center" && <><p>Welcome to the TrustVault Help Center. Use these quick steps to get started:</p><ul><li><b>Manage files:</b> use My Documents to browse, preview, download, or upload documents.</li><li><b>Control access:</b> use Share to grant or revoke access for an active user.</li><li><b>Review activity:</b> open Recent Activity or Audit Logs.</li><li><b>Account preferences:</b> open Settings to review available workspace options.</li></ul><p>For account-specific problems, contact your TrustVault administrator.</p></>}
-              {footerInfo === "Security" && <><p>TrustVault is designed around controlled document access and workspace accountability.</p><ul><li>Access decisions are enforced by the server.</li><li>Document sharing is managed through explicit permissions.</li><li>Activity auditing helps workspace owners review available events.</li><li>Keep your sign-in credentials private and sign out on shared devices.</li></ul><p>This overview describes the app’s intended safeguards; it is not an independent security certification.</p></>}
+              {footerInfo === "Security" && <><p>TrustVault is designed around controlled document access and workspace accountability.</p><ul><li>Access decisions are enforced by the server.</li><li>Document sharing is managed through explicit permissions.</li><li>Activity auditing helps workspace owners review available events.</li><li>Keep your sign-in credentials private and sign out on shared devices.</li></ul><p>This overview describes the appâ€™s intended safeguards; it is not an independent security certification.</p></>}
               {footerInfo === "Privacy Policy" && <><p>TrustVault is intended to help you manage documents privately and control who can access them.</p><ul><li>Use sharing controls to decide which workspace users can access documents.</li><li>Workspace activity may be recorded for security and auditing.</li><li>Do not upload information you are not authorized to store.</li><li>Contact your workspace administrator to ask about data handling, retention, or deletion.</li></ul><p>This is an in-app overview, not a substitute for a reviewed legal privacy policy.</p></>}
-              {footerInfo === "Terms of Service" && <><p>Use TrustVault only for lawful purposes and only with documents you are authorized to manage.</p><ul><li>Protect your account credentials.</li><li>Do not attempt to bypass permissions or access another user’s documents without authorization.</li><li>Use sharing and download features responsibly.</li><li>Report suspected unauthorized access to your workspace administrator.</li></ul><p>These introductory guidelines are not a formal legal agreement.</p></>}
-              {footerInfo === "Cookie Policy" && <><p>This application may use browser storage or session mechanisms required to sign you in and keep the workspace functioning.</p><p>Do not assume optional analytics or advertising cookies are used. Ask your administrator for the deployed application’s full cookie inventory and retention details.</p></>}
+              {footerInfo === "Terms of Service" && <><p>Use TrustVault only for lawful purposes and only with documents you are authorized to manage.</p><ul><li>Protect your account credentials.</li><li>Do not attempt to bypass permissions or access another userâ€™s documents without authorization.</li><li>Use sharing and download features responsibly.</li><li>Report suspected unauthorized access to your workspace administrator.</li></ul><p>These introductory guidelines are not a formal legal agreement.</p></>}
+              {footerInfo === "Cookie Policy" && <><p>This application may use browser storage or session mechanisms required to sign you in and keep the workspace functioning.</p><p>Do not assume optional analytics or advertising cookies are used. Ask your administrator for the deployed applicationâ€™s full cookie inventory and retention details.</p></>}
               {footerInfo === "About TrustVault" && <><p>TrustVault is a secure document-sharing workspace built around a core promise: only people explicitly granted access should be able to reach a document, and workspace activity should be reviewable afterwards.</p><p>It is being developed in response to the Snovasys Fresher Hiring Challenge 2026, which emphasizes document-level authorization, permission revocation, and a meaningful audit trail.</p><p>Core capabilities include document upload and organization, named-user read/edit permissions, access revocation, activity logs, and administrative visibility.</p></>}
               {footerInfo === "Our Mission" && <><p>Our mission is to help teams share confidential documents without losing control over who can access them.</p><ul><li>Enforce authorization on the server, not only by hiding interface controls.</li><li>Make document permissions explicit and revocable.</li><li>Keep an audit trail of document and permission activity, including denied attempts where supported.</li><li>Prioritize security and accountability over unnecessary complexity.</li></ul><p>These goals reflect the TrustVault project brief; deployed security properties should be verified through tests and review.</p></>}
               {footerInfo === "Careers" && <><p>TrustVault is a project developed in the context of the Snovasys Fresher Hiring Challenge 2026. There is no separate careers programme or vacancy page configured at present.</p><p>For project-related enquiries, email <a href="mailto:pernapatsrigopi@gmail.com">pernapatsrigopi@gmail.com</a>.</p></>}
@@ -631,11 +773,12 @@ export default function Home() {
         </div>}
       </section>
 
-      {showUpload && <div className="tv-modal-backdrop" onMouseDown={e => { if (e.target === e.currentTarget) setShowUpload(false); }}><section className="tv-modal" role="dialog" aria-modal="true" aria-labelledby="upload-title"><div className="tv-modal-head"><div><span className="tv-eyebrow">ADD TO YOUR VAULT</span><h2 id="upload-title">Upload document</h2></div><button className="tv-modal-close" onClick={() => setShowUpload(false)} aria-label="Close">×</button></div><p className="tv-muted">Select a document and add details. Your existing server validation still applies.</p><form className="tv-modal-form" onSubmit={upload}><label htmlFor="up-name">Document name</label><input id="up-name" required maxLength={200} value={filename} onChange={e => setFilename(e.target.value)} placeholder="e.g. Insurance policy" /><label htmlFor="up-category">Category</label><input id="up-category" maxLength={100} value={docCategory} onChange={e => setDocCategory(e.target.value)} placeholder="Personal, Work, Finance…" /><label htmlFor="up-description">Description</label><textarea id="up-description" maxLength={1000} rows={2} value={description} onChange={e => setDescription(e.target.value)} placeholder="Optional details" /><label className="tv-dropzone"><span className="tv-drop-icon">⇧</span><strong>{file ? file.name : "Choose a file to upload"}</strong><span>{file ? size(file.size) : "Select a supported document from your computer"}</span><input type="file" required accept=".pdf,.txt,.png,.jpg,.jpeg,.docx" onChange={e => setFile(e.target.files?.[0] || null)} /></label>{error && <div className="tv-error">{error}</div>}<div className="tv-modal-actions"><button type="button" className="tv-button tv-button-ghost" onClick={() => setShowUpload(false)}>Cancel</button><button type="submit" className="tv-button" disabled={uploading}>{uploading ? "Uploading…" : "⇧ Upload securely"}</button></div></form></section></div>}
+      {showUpload && <div className="tv-modal-backdrop" onMouseDown={e => { if (e.target === e.currentTarget) setShowUpload(false); }}><section className="tv-modal" role="dialog" aria-modal="true" aria-labelledby="upload-title"><div className="tv-modal-head"><div><span className="tv-eyebrow">ADD TO YOUR VAULT</span><h2 id="upload-title">Upload document</h2></div><button className="tv-modal-close" onClick={() => setShowUpload(false)} aria-label="Close">Ã—</button></div><p className="tv-muted">Select a document and add details. Your existing server validation still applies.</p><form className="tv-modal-form" onSubmit={upload}><label htmlFor="up-name">Document name</label><input id="up-name" required maxLength={200} value={filename} onChange={e => setFilename(e.target.value)} placeholder="e.g. Insurance policy" /><label htmlFor="up-category">Category</label><input id="up-category" maxLength={100} value={docCategory} onChange={e => setDocCategory(e.target.value)} placeholder="Personal, Work, Financeâ€¦" /><label htmlFor="up-description">Description</label><textarea id="up-description" maxLength={1000} rows={2} value={description} onChange={e => setDescription(e.target.value)} placeholder="Optional details" /><label className="tv-dropzone"><span className="tv-drop-icon">â‡§</span><strong>{file ? file.name : "Choose a file to upload"}</strong><span>{file ? size(file.size) : "Select a supported document from your computer"}</span><input type="file" required accept=".pdf,.txt,.png,.jpg,.jpeg,.docx" onChange={e => setFile(e.target.files?.[0] || null)} /></label>{error && <div className="tv-error">{error}</div>}<div className="tv-modal-actions"><button type="button" className="tv-button tv-button-ghost" onClick={() => setShowUpload(false)}>Cancel</button><button type="submit" className="tv-button" disabled={uploading}>{uploading ? "Uploadingâ€¦" : "â‡§ Upload securely"}</button></div></form></section></div>}
 
-      {showShare && <div className="tv-modal-backdrop" onMouseDown={e => { if (e.target === e.currentTarget) setShowShare(null); }}><section className="tv-modal" role="dialog" aria-modal="true" aria-labelledby="share-title"><div className="tv-modal-head"><div><span className="tv-eyebrow">DOCUMENT ACCESS</span><h2 id="share-title">Share document</h2></div><button className="tv-modal-close" onClick={() => setShowShare(null)} aria-label="Close">×</button></div><div className="tv-share-doc"><span className={`tv-file-badge badge-${kind(showShare).toLowerCase()}`}>{kind(showShare)}</span><div><strong>{showShare.name}</strong><span>{size(showShare.file_size)} · {showShare.original_filename}</span></div></div><p className="tv-muted">Search for an existing active user, then grant or revoke their access.</p><div className="tv-recipient-search"><input placeholder="Search users by name or email…" value={recipientQuery} onChange={e => setRecipientQuery(e.target.value)} onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); void searchRecipients(); } }} /><button className="tv-button" onClick={() => void searchRecipients()}>Search</button></div>{recipients.length > 0 && <div className="tv-recipient-list">{recipients.map(u => <button key={u.id} className={`tv-recipient ${recipient === u.id ? "selected" : ""}`} onClick={() => setRecipient(u.id)}><span className="tv-avatar">{u.name.slice(0, 1).toUpperCase()}</span><span><strong>{u.name}</strong><small>{u.email} · {u.role}</small></span><span className="tv-radio-dot">{recipient === u.id ? "●" : "○"}</span></button>)}</div>}<div className="tv-permission-choice"><label htmlFor="share-mode">Action</label><select id="share-mode" value={shareMode} onChange={e => setShareMode(e.target.value as "grant" | "revoke")}><option value="grant">Grant access</option><option value="revoke">Revoke access</option></select>{shareMode === "grant" && <><label htmlFor="share-permission">Permission type</label><select id="share-permission" value={permission} onChange={e => setPermission(e.target.value as "read" | "edit")}><option value="read">Read — view only</option><option value="edit">Edit — view and modify</option></select></>}</div>{error && <div className="tv-error">{error}</div>}<div className="tv-modal-actions"><button className="tv-button tv-button-ghost" onClick={() => setShowShare(null)}>Cancel</button><button className="tv-button" disabled={sharing || !recipient} onClick={() => void submitShare()}>{sharing ? "Saving…" : shareMode === "grant" ? "Grant access →" : "Revoke access →"}</button></div></section></div>}
+      {showShare && <div className="tv-modal-backdrop" onMouseDown={e => { if (e.target === e.currentTarget) setShowShare(null); }}><section className="tv-modal" role="dialog" aria-modal="true" aria-labelledby="share-title"><div className="tv-modal-head"><div><span className="tv-eyebrow">DOCUMENT ACCESS</span><h2 id="share-title">Share document</h2></div><button className="tv-modal-close" onClick={() => setShowShare(null)} aria-label="Close">Ã—</button></div><div className="tv-share-doc"><span className={`tv-file-badge badge-${kind(showShare).toLowerCase()}`}>{kind(showShare)}</span><div><strong>{showShare.name}</strong><span>{size(showShare.file_size)} Â· {showShare.original_filename}</span></div></div><p className="tv-muted">Search for an existing active user, then grant or revoke their access.</p><div className="tv-recipient-search"><input placeholder="Search users by name or emailâ€¦" value={recipientQuery} onChange={e => setRecipientQuery(e.target.value)} onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); void searchRecipients(); } }} /><button className="tv-button" onClick={() => void searchRecipients()}>Search</button></div>{recipients.length > 0 && <div className="tv-recipient-list">{recipients.map(u => <button key={u.id} className={`tv-recipient ${recipient === u.id ? "selected" : ""}`} onClick={() => setRecipient(u.id)}><span className="tv-avatar">{u.name.slice(0, 1).toUpperCase()}</span><span><strong>{u.name}</strong><small>{u.email} Â· {u.role}</small></span><span className="tv-radio-dot">{recipient === u.id ? "â—" : "â—‹"}</span></button>)}</div>}<div className="tv-permission-choice"><label htmlFor="share-mode">Action</label><select id="share-mode" value={shareMode} onChange={e => setShareMode(e.target.value as "grant" | "revoke")}><option value="grant">Grant access</option><option value="revoke">Revoke access</option></select>{shareMode === "grant" && <><label htmlFor="share-permission">Permission type</label><select id="share-permission" value={permission} onChange={e => setPermission(e.target.value as "read" | "edit")}><option value="read">Read â€” view only</option><option value="edit">Edit â€” view and modify</option></select></>}</div>{error && <div className="tv-error">{error}</div>}<div className="tv-modal-actions"><button className="tv-button tv-button-ghost" onClick={() => setShowShare(null)}>Cancel</button><button className="tv-button" disabled={sharing || !recipient} onClick={() => void submitShare()}>{sharing ? "Savingâ€¦" : shareMode === "grant" ? "Grant access â†’" : "Revoke access â†’"}</button></div></section></div>}
 
-      {preview && <div className="tv-modal-backdrop tv-preview-backdrop" onMouseDown={e => { if (e.target === e.currentTarget) { setPreview(null); if (previewUrl) URL.revokeObjectURL(previewUrl); setPreviewUrl(""); } }}><section className="tv-preview-modal" role="dialog" aria-modal="true" aria-labelledby="preview-title"><header className="tv-preview-header"><div><span className="tv-eyebrow">DOCUMENT PREVIEW</span><h2 id="preview-title">{preview.name}</h2></div><div><button className="tv-button tv-button-ghost" onClick={() => void download(preview)}>↓ Download</button><button className="tv-modal-close" onClick={() => { setPreview(null); if (previewUrl) URL.revokeObjectURL(previewUrl); setPreviewUrl(""); }}>×</button></div></header>{previewUrl && (preview.mime_type === "application/pdf" || /\.(pdf)$/i.test(preview.original_filename) ? <iframe className="tv-preview-frame" src={previewUrl} title={`Preview of ${preview.name}`} /> : preview.mime_type?.startsWith("image/") || /\.(png|jpe?g|webp)$/i.test(preview.original_filename) ? <div className="tv-image-preview"><img src={previewUrl} alt={preview.name} /></div> : <div className="tv-empty"><span className="tv-empty-icon">▤</span><h3>Preview is not available for this file type</h3><p>Download the file to open it with a compatible application.</p><button className="tv-button" onClick={() => void download(preview)}>↓ Download document</button></div>)}</section></div>}
+      {preview && <div className="tv-modal-backdrop tv-preview-backdrop" onMouseDown={e => { if (e.target === e.currentTarget) { setPreview(null); if (previewUrl) URL.revokeObjectURL(previewUrl); setPreviewUrl(""); } }}><section className="tv-preview-modal" role="dialog" aria-modal="true" aria-labelledby="preview-title"><header className="tv-preview-header"><div><span className="tv-eyebrow">DOCUMENT PREVIEW</span><h2 id="preview-title">{preview.name}</h2></div><div><button className="tv-button tv-button-ghost" onClick={() => void download(preview)}>â†“ Download</button><button className="tv-modal-close" onClick={() => { setPreview(null); if (previewUrl) URL.revokeObjectURL(previewUrl); setPreviewUrl(""); }}>Ã—</button></div></header>{previewUrl && (preview.mime_type === "application/pdf" || /\.(pdf)$/i.test(preview.original_filename) ? <iframe className="tv-preview-frame" src={previewUrl} title={`Preview of ${preview.name}`} /> : preview.mime_type?.startsWith("image/") || /\.(png|jpe?g|webp)$/i.test(preview.original_filename) ? <div className="tv-image-preview"><img src={previewUrl} alt={preview.name} /></div> : <div className="tv-empty"><span className="tv-empty-icon">â–¤</span><h3>Preview is not available for this file type</h3><p>Download the file to open it with a compatible application.</p><button className="tv-button" onClick={() => void download(preview)}>â†“ Download document</button></div>)}</section></div>}
     </main>
   );
 }
+
