@@ -470,7 +470,8 @@ export default function Home() {
           }
 
           if (!r.ok) {
-            failed.push(userName);
+            const reason = d.message || d.error || `HTTP ${r.status}`;
+            failed.push(`${userName} (${reason})`);
           } else {
             succeeded.push(userName);
           }

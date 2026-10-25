@@ -89,3 +89,8 @@ Before describing the project as fully submission-ready, verify and complete the
 - The required demonstration video, if applicable.
 
 Do not claim an outstanding item is complete until it has been implemented and verified.
+
+## Project Demo
+
+Watch the TrustVault website demonstration: https://youtu.be/IZCrGb6hGNc
+

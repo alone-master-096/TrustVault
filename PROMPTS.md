@@ -52,3 +52,13 @@ On 2026-10-25, the reported local PowerShell output showed 33 backend tests pass
 
 ### Keeping this log accurate
 For future AI-assisted work, record the actual prompt and date, the suggestion accepted or rejected, the code or documentation changed, the exact test/build command and result, and a commit link when a change is committed. Do not claim an AI suggestion, test result, or production verification unless there is evidence for it.
+
+## 2026-10-25 — 7. API documentation accuracy and sharing error feedback
+
+**Prompt/task:** Compare `docs/API.md` with the registered Express routes and route mounts. Make only a targeted documentation clarification. Preserve existing working application behavior. Improve sharing error feedback so the interface reports the backend's error when a share request fails.
+
+**Changes:** Added route-registration and authorization clarifications to `docs/API.md`. The frontend sharing error handling was previously updated to include the backend error message. The API documentation change has a timestamped backup.
+
+**Verification evidence:** On 2026-10-25, local `npm test` in `backend` reported 33 tests passed and 0 failed. The output included simulated database and audit failures exercised by tests; these did not cause test failures. The API documentation change itself is documentation-only.
+
+**Limitations:** This records the task and observed local test output. It does not claim that every challenge requirement is complete or that a fresh database installation has been validated.

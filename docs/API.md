@@ -182,3 +182,28 @@ Actual response bodies depend on the endpoint and error condition. See the corre
 ## Verification Status
 
 This reference is based on the inspected route registrations and controllers. It documents implementation behavior but does not prove every endpoint works end to end. Run automated tests and verify deployed multi-user scenarios before claiming complete release readiness.
+## Route Registration and Authorization Clarifications
+
+The following routes were checked against the backend route registrations:
+
+| Method | Endpoint | Registered handler and access |
+|---|---|---|
+| POST | `/api/auth/register` | Public registration |
+| POST | `/api/auth/login` | Public login |
+| POST | `/api/auth/forgot-password` | Public password-reset request |
+| POST | `/api/auth/reset-password` | Public password-reset completion |
+| GET | `/api/auth/me` | Authenticated; rejects disabled accounts |
+| GET | `/api/documents` | Authenticated document listing |
+| POST | `/api/documents/upload` | Authenticated upload |
+| GET | `/api/documents/:id/download` | Authenticated; document read access checked by the download handler |
+| DELETE | `/api/documents/:id` | Authenticated; ownership enforced by the delete handler |
+| POST | `/api/documents/:id/permissions` | Authenticated; ownership enforced by the permission service |
+| DELETE | `/api/documents/:id/permissions` | Authenticated; ownership enforced by the permission service |
+| GET | `/api/users/search?q=<query>` | Authenticated; owner/admin role required by the users route |
+| GET | `/api/admin/users?q=<query>` | Authentication and admin/owner role required by router middleware |
+| GET | `/api/admin/audit?limit=50&offset=0` | Authentication and admin/owner role required by router middleware |
+
+The `/api/documents` and `/api/users` route groups are mounted by `backend/src/server.ts`. The `/api/admin` and `/api/auth` groups are also mounted there. The current-user endpoint `/api/auth/me` is registered directly in the server.
+
+This table describes the inspected route registrations. It is not a substitute for automated or deployed end-to-end authorization tests.
+
