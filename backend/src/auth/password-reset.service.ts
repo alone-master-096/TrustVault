@@ -1,4 +1,4 @@
-﻿import { createHash, randomInt } from "node:crypto";
+import { createHash, randomInt } from "node:crypto";
 import bcrypt from "bcryptjs";
 import nodemailer from "nodemailer";
 import { pool } from "../config/database";
@@ -72,6 +72,9 @@ export async function requestPasswordReset(rawEmail: string): Promise<void> {
 
   try {
     const transporter = nodemailer.createTransport({
+    connectionTimeout: 10000,
+    greetingTimeout: 10000,
+    socketTimeout: 15000,
       host: "smtp.gmail.com",
       port: 465,
       secure: true,
