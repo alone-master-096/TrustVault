@@ -119,6 +119,7 @@ export default function Home() {
   const [recipientQuery, setRecipientQuery] = useState("");
   const [recipients, setRecipients] = useState<User[]>([]);
   const [recipient, setRecipient] = useState("");
+  const [selectedRecipientIds, setSelectedRecipientIds] = useState<string[]>([]);
   const [permission, setPermission] = useState<"read" | "edit">("read");
   const [sharing, setSharing] = useState(false);
   const [shareMode, setShareMode] = useState<"grant" | "revoke">("grant");
@@ -426,24 +427,81 @@ export default function Home() {
 
   async function submitShare() {
     const token = sessionStorage.getItem(KEY);
-    if (!token || !showShare || !recipient) { setError("Search for and select a recipient first."); return; }
-    setSharing(true); setError(""); setNotice("");
+    const targets = selectedRecipientIds.length
+      ? selectedRecipientIds
+      : (recipient ? [recipient] : []);
+
+    if (!token || !showShare || targets.length === 0) {
+      setError("Select at least one user first.");
+      return;
+    }
+
+    setSharing(true);
+    setError("");
+    setNotice("");
+
+    const succeeded: string[] = [];
+    const failed: string[] = [];
+
     try {
-      const r = await fetch(`${API}/api/documents/${encodeURIComponent(showShare.id)}/permissions`, {
-        method: shareMode === "grant" ? "POST" : "DELETE",
-        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-        body: JSON.stringify(shareMode === "grant" ? { userId: recipient, permission } : { userId: recipient })
-      });
-      const d = await r.json().catch(() => ({}));
-      if (r.status === 401) { signOut(); throw new Error("Session expired."); }
-      if (!r.ok) throw new Error(d.message || d.error || "Could not update access.");
-      const target = recipients.find(x => x.id === recipient);
-      setNotice(shareMode === "grant"
-        ? `${permission.toUpperCase()} access granted to ${target?.name || "the selected user"}.`
-        : `Access revoked for ${target?.name || "the selected user"}.`);
-      setShowShare(null); setRecipients([]); setRecipientQuery(""); setRecipient("");
-    } catch (e) { setError(e instanceof Error ? e.message : "Could not update access."); }
-    finally { setSharing(false); }
+      for (const userId of targets) {
+        const userName = recipients.find(u => u.id === userId)?.name || userId;
+
+        try {
+          const r = await fetch(
+            `${API}/api/documents/${encodeURIComponent(showShare.id)}/permissions`,
+            {
+              method: shareMode === "grant" ? "POST" : "DELETE",
+              headers: {
+                Authorization: `Bearer ${token}`,
+                "Content-Type": "application/json"
+              },
+              body: JSON.stringify(
+                shareMode === "grant" ? { userId, permission } : { userId }
+              )
+            }
+          );
+
+          const d = await r.json().catch(() => ({}));
+
+          if (r.status === 401) {
+            signOut();
+            throw new Error("Session expired.");
+          }
+
+          if (!r.ok) {
+            failed.push(userName);
+          } else {
+            succeeded.push(userName);
+          }
+        } catch (e) {
+          if (e instanceof Error && e.message === "Session expired.") {
+            throw e;
+          }
+          failed.push(userName);
+        }
+      }
+
+      if (succeeded.length > 0) {
+        setNotice(
+          `${shareMode === "grant" ? permission.toUpperCase() + " access granted" : "Access revoked"} for ${succeeded.length} user(s): ${succeeded.join(", ")}.`
+        );
+      }
+
+      if (failed.length > 0) {
+        setError(`Could not update access for: ${failed.join(", ")}.`);
+      } else {
+        setShowShare(null);
+        setRecipients([]);
+        setRecipientQuery("");
+        setRecipient("");
+        setSelectedRecipientIds([]);
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not update access.");
+    } finally {
+      setSharing(false);
+    }
   }
 
   const categories = useMemo(() => ["All", ...Array.from(new Set(docs.map(d => d.category || "Uncategorized"))).sort()], [docs]);
@@ -634,7 +692,7 @@ if (!user) return (
             <section className="tv-panel tv-recent-panel"><div className="tv-panel-heading"><div><span className="tv-eyebrow">YOUR LIBRARY</span><h2>Recent Documents</h2></div><button className="tv-text-link" onClick={() => setTab("My Documents")}>View all →</button></div>
               {docs.length === 0 ? <div className="tv-empty"><span className="tv-empty-icon">▤</span><h3>Your vault is ready</h3><p>Upload your first document to get started.</p><button className="tv-button" onClick={() => setShowUpload(true)}>Upload document</button></div> :
                 <div className="tv-recent-table"><div className="tv-table-head"><span>Document</span><span>Type</span><span>Access</span><span>Size</span><span>Actions</span></div>
-                  {docs.slice(0, 6).map((d, i) => <article className="tv-table-row" key={d.id} style={{ animationDelay: `${i * 45}ms` }}><button className={`tv-file-badge badge-${kind(d).toLowerCase()}`} onClick={() => void download(d, true)}>{kind(d)}</button><button className="tv-table-name" onClick={() => void download(d, true)}><strong>{d.name}</strong><span>{d.original_filename}</span></button><span className="tv-table-type">{kind(d)}</span><span className="tv-table-access">{d.is_owner ? "Owner" : d.access_permission}</span><span className="tv-table-size">{size(d.file_size)}</span><div className="tv-row-actions">{d.is_owner && <button title="Share document" onClick={() => { setShowShare(d); setRecipients([]); setRecipientQuery(""); }}>♧</button>}<button title="Download" onClick={() => void download(d)}>↓</button></div></article>)}
+                  {docs.slice(0, 6).map((d, i) => <article className="tv-table-row" key={d.id} style={{ animationDelay: `${i * 45}ms` }}><button className={`tv-file-badge badge-${kind(d).toLowerCase()}`} onClick={() => void download(d, true)}>{kind(d)}</button><button className="tv-table-name" onClick={() => void download(d, true)}><strong>{d.name}</strong><span>{d.original_filename}</span></button><span className="tv-table-type">{kind(d)}</span><span className="tv-table-access">{d.is_owner ? "Owner" : d.access_permission}</span><span className="tv-table-size">{size(d.file_size)}</span><div className="tv-row-actions">{d.is_owner && <button title="Share document" onClick={() => { setShowShare(d); setRecipients([]); setRecipientQuery(""); setSelectedRecipientIds([]); }}>♧</button>}<button title="Download" onClick={() => void download(d)}>↓</button></div></article>)}
                 </div>}
             </section>
             <aside className="tv-side-stack">
@@ -656,16 +714,16 @@ if (!user) return (
               <div className="tv-library-toolbar"><input className="tv-library-search" placeholder="Search documents…" value={query} onChange={e => setQuery(e.target.value)} /><select value={category} onChange={e => setCategory(e.target.value)} aria-label="Filter category">{categories.map(c => <option key={c}>{c}</option>)}</select><div className="tv-view-switch"><button className={view === "grid" ? "active" : ""} onClick={() => setView("grid")}>▦ Grid</button><button className={view === "list" ? "active" : ""} onClick={() => setView("list")}>☷ List</button></div></div>
               {filtered.length === 0 ? <div className="tv-empty"><span className="tv-empty-icon">▤</span><h3>No matching documents</h3><p>Try another search or category, or upload a new document.</p><button className="tv-button" onClick={() => { setQuery(""); setCategory("All"); setShowUpload(true); }}>＋ Add document</button></div> :
                 <div className={view === "grid" ? "tv-doc-grid" : "tv-doc-list"}>
-                  {filtered.map(d => <article className="tv-library-doc" key={d.id}><button className={`tv-file-badge badge-${kind(d).toLowerCase()}`} onClick={() => void download(d, true)}>{kind(d)}</button><div className="tv-library-doc-info"><strong>{d.name}</strong><span>{d.original_filename}</span><div className="tv-doc-tags"><span>{d.category || "Uncategorized"}</span><span>{d.is_owner ? "Owner" : `${d.access_permission} access`}</span><span>{size(d.file_size)}</span></div></div><div className="tv-library-actions">{d.is_owner && <button onClick={() => { setShowShare(d); setRecipients([]); setRecipientQuery(""); }}>Share</button>} {d.is_owner && <button onClick={() => void deleteDocument(d)} style={{ color: "#b91c1c" }}>Delete</button>}<button onClick={() => void download(d, true)}>Preview</button><button onClick={() => void download(d)}>↓</button></div></article>)}
+                  {filtered.map(d => <article className="tv-library-doc" key={d.id}><button className={`tv-file-badge badge-${kind(d).toLowerCase()}`} onClick={() => void download(d, true)}>{kind(d)}</button><div className="tv-library-doc-info"><strong>{d.name}</strong><span>{d.original_filename}</span><div className="tv-doc-tags"><span>{d.category || "Uncategorized"}</span><span>{d.is_owner ? "Owner" : `${d.access_permission} access`}</span><span>{size(d.file_size)}</span></div></div><div className="tv-library-actions">{d.is_owner && <button onClick={() => { setShowShare(d); setRecipients([]); setRecipientQuery(""); setSelectedRecipientIds([]); }}>Share</button>} {d.is_owner && <button onClick={() => void deleteDocument(d)} style={{ color: "#b91c1c" }}>Delete</button>}<button onClick={() => void download(d, true)}>Preview</button><button onClick={() => void download(d)}>↓</button></div></article>)}
                 </div>}
             </section>
           </> : tab === "Users" ? <section className="tv-panel tv-workflow-panel">
             <div className="tv-panel-heading"><div><span className="tv-eyebrow">WORKSPACE DIRECTORY</span><h2>Find workspace users</h2><p>Search existing accounts before sharing documents with them.</p></div><span className="tv-panel-symbol">♙</span></div>
             <form className="tv-directory-search" onSubmit={e => { e.preventDefault(); void loadDirectoryUsers(); }}><input aria-label="Search users" placeholder="Enter a name or email (2+ characters)" value={directoryQuery} onChange={e => setDirectoryQuery(e.target.value)} /><button className="tv-button" type="submit" disabled={directoryLoading}>{directoryLoading ? "Searching…" : "Search users →"}</button></form>
-            {directoryUsers.length > 0 ? <div className="tv-directory-list">{directoryUsers.map(u => <article className="tv-directory-user" key={u.id}><div className="tv-avatar">{(u.name || "U").slice(0,1).toUpperCase()}</div><div className="tv-directory-user-main"><strong>{u.name}</strong><span>{u.email}</span></div><span className="tv-role-pill">{u.role || "User"}</span><button className="tv-text-link" onClick={() => { const owned = docs.find(d => d.is_owner); if (owned) { setShowShare(owned); setRecipients([u]); setRecipient(u.id); setRecipientQuery(`${u.name} ${u.email}`); setPermission(defaultPermission); setShareMode("grant"); } else { setError("Upload a document first, then share it with this user."); } }}>Share a file →</button></article>)}</div> : <div className="tv-empty"><span className="tv-empty-icon">♙</span><h3>Search for a user</h3><p>Enter at least two characters to find active accounts. User creation and role administration are not exposed by the current user-search endpoint.</p></div>}
+            {directoryUsers.length > 0 ? <div className="tv-directory-list">{directoryUsers.map(u => <article className="tv-directory-user" key={u.id}><div className="tv-avatar">{(u.name || "U").slice(0,1).toUpperCase()}</div><div className="tv-directory-user-main"><strong>{u.name}</strong><span>{u.email}</span></div><span className="tv-role-pill">{u.role || "User"}</span><button className="tv-text-link" onClick={() => { const owned = docs.find(d => d.is_owner); if (owned) { setShowShare(owned); setRecipients([u]); setRecipient(u.id); setSelectedRecipientIds([u.id]); setRecipientQuery(`${u.name} ${u.email}`); setPermission(defaultPermission); setShareMode("grant"); } else { setError("Upload a document first, then share it with this user."); } }}>Share a file →</button></article>)}</div> : <div className="tv-empty"><span className="tv-empty-icon">♙</span><h3>Search for a user</h3><p>Enter at least two characters to find active accounts. User creation and role administration are not exposed by the current user-search endpoint.</p></div>}
           </section> : tab === "Permissions" ? <section className="tv-panel tv-workflow-panel">
             <div className="tv-panel-heading"><div><span className="tv-eyebrow">ACCESS CONTROL</span><h2>Document permissions</h2><p>Manage read/edit access using the existing secure sharing workflow.</p></div><span className="tv-panel-symbol">♧</span></div>
-            {docs.filter(d => d.is_owner).length > 0 ? <div className="tv-permission-list">{docs.filter(d => d.is_owner).map(d => <article className="tv-permission-document" key={d.id}><span className={`tv-file-badge badge-${kind(d).toLowerCase()}`}>{kind(d)}</span><div className="tv-permission-document-main"><strong>{d.name}</strong><span>{d.original_filename} · {size(d.file_size)}</span><small>Current access: owner</small></div><button className="tv-button" onClick={() => { setShowShare(d); setRecipients([]); setRecipientQuery(""); setRecipient(""); setShareMode("grant"); }}>Manage access →</button></article>)}</div> : <div className="tv-empty"><span className="tv-empty-icon">♧</span><h3>No owned documents yet</h3><p>Upload a document to grant or revoke user access from here.</p><button className="tv-button" onClick={() => setShowUpload(true)}>＋ Upload document</button></div>}
+            {docs.filter(d => d.is_owner).length > 0 ? <div className="tv-permission-list">{docs.filter(d => d.is_owner).map(d => <article className="tv-permission-document" key={d.id}><span className={`tv-file-badge badge-${kind(d).toLowerCase()}`}>{kind(d)}</span><div className="tv-permission-document-main"><strong>{d.name}</strong><span>{d.original_filename} · {size(d.file_size)}</span><small>Current access: owner</small></div><button className="tv-button" onClick={() => { setShowShare(d); setRecipients([]); setRecipientQuery(""); setSelectedRecipientIds([]); setRecipient(""); setSelectedRecipientIds([]); setShareMode("grant"); }}>Manage access →</button></article>)}</div> : <div className="tv-empty"><span className="tv-empty-icon">♧</span><h3>No owned documents yet</h3><p>Upload a document to grant or revoke user access from here.</p><button className="tv-button" onClick={() => setShowUpload(true)}>＋ Upload document</button></div>}
             <div className="tv-permission-footnote">Permission changes are submitted to the existing backend endpoint and enforced by the server. Select “Manage access” to grant READ/EDIT or revoke access.</div>
           </section> : tab === "Audit Logs" ? <section className="tv-panel tv-workflow-panel">
             <div className="tv-panel-heading"><div><span className="tv-eyebrow">SECURITY HISTORY</span><h2>Audit logs</h2><p>Recent recorded activity associated with your account and owned documents.</p></div><button className="tv-button tv-button-ghost" onClick={() => void loadAuditLogs()} disabled={auditLoading}>{auditLoading ? "Refreshing…" : "↻ Refresh"}</button></div>
@@ -776,7 +834,28 @@ if (!user) return (
 
       {showUpload && <div className="tv-modal-backdrop" onMouseDown={e => { if (e.target === e.currentTarget) setShowUpload(false); }}><section className="tv-modal" role="dialog" aria-modal="true" aria-labelledby="upload-title"><div className="tv-modal-head"><div><span className="tv-eyebrow">ADD TO YOUR VAULT</span><h2 id="upload-title">Upload document</h2></div><button className="tv-modal-close" onClick={() => setShowUpload(false)} aria-label="Close">×</button></div><p className="tv-muted">Select a document and add details. Your existing server validation still applies.</p><form className="tv-modal-form" onSubmit={upload}><label htmlFor="up-name">Document name</label><input id="up-name" required maxLength={200} value={filename} onChange={e => setFilename(e.target.value)} placeholder="e.g. Insurance policy" /><label htmlFor="up-category">Category</label><input id="up-category" maxLength={100} value={docCategory} onChange={e => setDocCategory(e.target.value)} placeholder="Personal, Work, Finance…" /><label htmlFor="up-description">Description</label><textarea id="up-description" maxLength={1000} rows={2} value={description} onChange={e => setDescription(e.target.value)} placeholder="Optional details" /><label className="tv-dropzone"><span className="tv-drop-icon">⇧</span><strong>{file ? file.name : "Choose a file to upload"}</strong><span>{file ? size(file.size) : "Select a supported document from your computer"}</span><input type="file" required accept=".pdf,.txt,.png,.jpg,.jpeg,.docx" onChange={e => setFile(e.target.files?.[0] || null)} /></label>{error && <div className="tv-error">{error}</div>}<div className="tv-modal-actions"><button type="button" className="tv-button tv-button-ghost" onClick={() => setShowUpload(false)}>Cancel</button><button type="submit" className="tv-button" disabled={uploading}>{uploading ? "Uploading…" : "⇧ Upload securely"}</button></div></form></section></div>}
 
-      {showShare && <div className="tv-modal-backdrop" onMouseDown={e => { if (e.target === e.currentTarget) setShowShare(null); }}><section className="tv-modal" role="dialog" aria-modal="true" aria-labelledby="share-title"><div className="tv-modal-head"><div><span className="tv-eyebrow">DOCUMENT ACCESS</span><h2 id="share-title">Share document</h2></div><button className="tv-modal-close" onClick={() => setShowShare(null)} aria-label="Close">×</button></div><div className="tv-share-doc"><span className={`tv-file-badge badge-${kind(showShare).toLowerCase()}`}>{kind(showShare)}</span><div><strong>{showShare.name}</strong><span>{size(showShare.file_size)} · {showShare.original_filename}</span></div></div><p className="tv-muted">Search for an existing active user, then grant or revoke their access.</p><div className="tv-recipient-search"><input placeholder="Search users by name or email…" value={recipientQuery} onChange={e => setRecipientQuery(e.target.value)} onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); void searchRecipients(); } }} /><button className="tv-button" onClick={() => void searchRecipients()}>Search</button></div>{recipients.length > 0 && <div className="tv-recipient-list">{recipients.map(u => <button key={u.id} className={`tv-recipient ${recipient === u.id ? "selected" : ""}`} onClick={() => setRecipient(u.id)}><span className="tv-avatar">{u.name.slice(0, 1).toUpperCase()}</span><span><strong>{u.name}</strong><small>{u.email} · {u.role}</small></span><span className="tv-radio-dot">{recipient === u.id ? "●" : "○"}</span></button>)}</div>}<div className="tv-permission-choice"><label htmlFor="share-mode">Action</label><select id="share-mode" value={shareMode} onChange={e => setShareMode(e.target.value as "grant" | "revoke")}><option value="grant">Grant access</option><option value="revoke">Revoke access</option></select>{shareMode === "grant" && <><label htmlFor="share-permission">Permission type</label><select id="share-permission" value={permission} onChange={e => setPermission(e.target.value as "read" | "edit")}><option value="read">Read — view only</option><option value="edit">Edit — view and modify</option></select></>}</div>{error && <div className="tv-error">{error}</div>}<div className="tv-modal-actions"><button className="tv-button tv-button-ghost" onClick={() => setShowShare(null)}>Cancel</button><button className="tv-button" disabled={sharing || !recipient} onClick={() => void submitShare()}>{sharing ? "Saving…" : shareMode === "grant" ? "Grant access →" : "Revoke access →"}</button></div></section></div>}
+      {showShare && <div className="tv-modal-backdrop" onMouseDown={e => { if (e.target === e.currentTarget) setShowShare(null); }}><section className="tv-modal" role="dialog" aria-modal="true" aria-labelledby="share-title"><div className="tv-modal-head"><div><span className="tv-eyebrow">DOCUMENT ACCESS</span><h2 id="share-title">Share document</h2></div><button className="tv-modal-close" onClick={() => setShowShare(null)} aria-label="Close">×</button></div><div className="tv-share-doc"><span className={`tv-file-badge badge-${kind(showShare).toLowerCase()}`}>{kind(showShare)}</span><div><strong>{showShare.name}</strong><span>{size(showShare.file_size)} · {showShare.original_filename}</span></div></div><p className="tv-muted">Search for an existing active user, then grant or revoke their access.</p><div className="tv-recipient-search"><input placeholder="Search users by name or email…" value={recipientQuery} onChange={e => setRecipientQuery(e.target.value)} onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); void searchRecipients(); } }} /><button className="tv-button" onClick={() => void searchRecipients()}>Search</button></div>{recipients.length > 0 && <div className="tv-recipient-list">
+  <div className="tv-recipient-bulk">
+    <label>
+      <input
+        type="checkbox"
+        checked={recipients.length > 0 && recipients.every(u => selectedRecipientIds.includes(u.id))}
+        onChange={e => setSelectedRecipientIds(e.target.checked ? Array.from(new Set([...selectedRecipientIds, ...recipients.map(u => u.id)])) : selectedRecipientIds.filter(id => !recipients.some(u => u.id === id)))}
+      />
+      Select all search results
+    </label>
+    <span>{selectedRecipientIds.length} selected</span>
+  </div>
+  {recipients.map(u => <label key={u.id} className={`tv-recipient ${selectedRecipientIds.includes(u.id) ? "selected" : ""}`}>
+    <input
+      type="checkbox"
+      checked={selectedRecipientIds.includes(u.id)}
+      onChange={e => setSelectedRecipientIds(e.target.checked ? [...selectedRecipientIds, u.id] : selectedRecipientIds.filter(id => id !== u.id))}
+    />
+    <span className="tv-avatar">{u.name.slice(0, 1).toUpperCase()}</span>
+    <span><strong>{u.name}</strong><small>{u.email} · {u.role}</small></span>
+  </label>)}
+</div>}<div className="tv-permission-choice"><label htmlFor="share-mode">Action</label><select id="share-mode" value={shareMode} onChange={e => setShareMode(e.target.value as "grant" | "revoke")}><option value="grant">Grant access</option><option value="revoke">Revoke access</option></select>{shareMode === "grant" && <><label htmlFor="share-permission">Permission type</label><select id="share-permission" value={permission} onChange={e => setPermission(e.target.value as "read" | "edit")}><option value="read">Read — view only</option><option value="edit">Edit — view and modify</option></select></>}</div>{error && <div className="tv-error">{error}</div>}<div className="tv-modal-actions"><button className="tv-button tv-button-ghost" onClick={() => setShowShare(null)}>Cancel</button><button className="tv-button" disabled={sharing || (selectedRecipientIds.length === 0 && !recipient)} onClick={() => void submitShare()}>{sharing ? "Saving…" : shareMode === "grant" ? "Grant access →" : "Revoke access →"}</button></div></section></div>}
 
       {preview && <div className="tv-modal-backdrop tv-preview-backdrop" onMouseDown={e => { if (e.target === e.currentTarget) { setPreview(null); if (previewUrl) URL.revokeObjectURL(previewUrl); setPreviewUrl(""); } }}><section className="tv-preview-modal" role="dialog" aria-modal="true" aria-labelledby="preview-title"><header className="tv-preview-header"><div><span className="tv-eyebrow">DOCUMENT PREVIEW</span><h2 id="preview-title">{preview.name}</h2></div><div><button className="tv-button tv-button-ghost" onClick={() => void download(preview)}>↓ Download</button><button className="tv-modal-close" onClick={() => { setPreview(null); if (previewUrl) URL.revokeObjectURL(previewUrl); setPreviewUrl(""); }}>×</button></div></header>{previewUrl && (preview.mime_type === "application/pdf" || /\.(pdf)$/i.test(preview.original_filename) ? <iframe className="tv-preview-frame" src={previewUrl} title={`Preview of ${preview.name}`} /> : preview.mime_type?.startsWith("image/") || /\.(png|jpe?g|webp)$/i.test(preview.original_filename) ? <div className="tv-image-preview"><img src={previewUrl} alt={preview.name} /></div> : <div className="tv-empty"><span className="tv-empty-icon">▤</span><h3>Preview is not available for this file type</h3><p>Download the file to open it with a compatible application.</p><button className="tv-button" onClick={() => void download(preview)}>↓ Download document</button></div>)}</section></div>}
     </main>
